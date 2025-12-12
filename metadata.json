@@ -1,0 +1,5 @@
+{
+  "name": "Imperialism Strategy LLM",
+  "description": "A browser-based strategy game skeleton featuring a modular TypeScript architecture, custom Game Loop, and Component-Entity-System foundation.",
+  "requestFramePermissions": []
+}
