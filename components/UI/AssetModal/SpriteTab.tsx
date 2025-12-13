@@ -45,6 +45,8 @@ const spriteCategories = {
         { key: 'STR_plantation', label: 'Плантация (Общ.)' },
         { key: 'STR_plantation_cotton', label: 'Плантация (Хлопок)' },
         { key: 'STR_plantation_fruit', label: 'Плантация (Фрукты)' },
+        { key: 'STR_ranch_wool', label: 'Ранчо (Овцы)' },
+        { key: 'STR_ranch_livestock', label: 'Ранчо (Скот)' },
     ]
 };
 

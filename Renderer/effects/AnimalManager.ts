@@ -141,7 +141,8 @@ export class AnimalManager {
         screenY: number, 
         currentHexSize: number, // Actual size on screen (base * zoom)
         resourceType: ResourceType,
-        assets: AssetManager
+        assets: AssetManager,
+        hasRanch: boolean = false
     ) {
         if (!assets.animalSpriteSheet) return;
 
@@ -184,7 +185,8 @@ export class AnimalManager {
         const shadowShiftY = (config.shadowY || 0) * scaleFactor;
 
         // Apply Distribution Spread
-        const spreadMult = config.clumpSpread || 1.0;
+        // If Ranch is present, force tighter spread (1.0x) to look like a pen/pasture
+        const spreadMult = hasRanch ? 1.0 : (config.clumpSpread || 1.0);
 
         renderList.forEach(animal => {
             let row = 0; // Idle

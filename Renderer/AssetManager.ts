@@ -281,7 +281,11 @@ export class AssetManager {
           'oil_well': 'res_build/oil_drill',
           'port': 'res_build/port',
           'plantation_cotton': 'res_build/cotton',
-          'plantation_fruit': 'res_build/fruit'
+          'plantation_fruit': 'res_build/fruit',
+          
+          // Added Ranch
+          'ranch_wool': 'res_build/wool',
+          'ranch_livestock': 'res_build/live_stock'
       };
 
       const structurePromises = Object.entries(structureFiles).map(async ([key, name]) => {

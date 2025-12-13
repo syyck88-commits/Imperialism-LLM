@@ -145,11 +145,85 @@ export function drawTileContent(
             ctx.font = `${Math.floor(size * 0.6)}px "Segoe UI Emoji", sans-serif`;
         }
 
-        let resourceDrawnAsSprite = false;
+        // --- 1. RENDER IMPROVEMENTS (LAYER 1) ---
+        if (tile.improvement !== ImprovementType.NONE &&
+            ![ImprovementType.ROAD, ImprovementType.RAILROAD, ImprovementType.CITY].includes(tile.improvement)) {
 
-        // --- 1. RENDER RESOURCES ---
+            let improvementDrawnAsSprite = false;
+            let spriteKey = '';
+
+            // Determine Sprite Key based on Improvement Type
+            if (tile.improvement === ImprovementType.DEPOT) spriteKey = 'STR_depot';
+            else if (tile.improvement === ImprovementType.PORT) spriteKey = 'STR_port';
+            else if (tile.improvement === ImprovementType.MINE) spriteKey = 'STR_mine';
+            else if (tile.improvement === ImprovementType.FARM) spriteKey = 'STR_farm';
+            else if (tile.improvement === ImprovementType.LUMBER_MILL) spriteKey = 'STR_lumber_mill';
+            else if (tile.improvement === ImprovementType.OIL_WELL) spriteKey = 'STR_oil_well';
+            else if (tile.improvement === ImprovementType.RANCH) {
+                if (tile.resource === ResourceType.WOOL) spriteKey = 'STR_ranch_wool';
+                else spriteKey = 'STR_ranch_livestock';
+            }
+            else if (tile.improvement === ImprovementType.PLANTATION) {
+                if (tile.resource === ResourceType.COTTON) spriteKey = 'STR_plantation_cotton';
+                else if (tile.resource === ResourceType.FRUIT) spriteKey = 'STR_plantation_fruit';
+                else spriteKey = 'STR_plantation'; // Fallback / Generic
+            }
+
+            if (spriteKey) {
+                const sprite = assets.getStructureSprite(spriteKey.replace('STR_', ''));
+                
+                if (sprite) {
+                    const config = assets.getConfig(spriteKey);
+                    const shouldDrawShadow = config.drawShadow ?? true;
+                    const aspect = sprite.width / sprite.height;
+                    const drawH = size * 1.5 * config.scale;
+                    const drawW = drawH * aspect;
+                    const drawY = y + isoOffset - drawH + (size * 1.1) + (config.shiftY * camera.zoom);
+                    const drawX = x - drawW / 2 + (config.shiftX * camera.zoom);
+                    
+                    if (shouldDrawShadow && config.shadowScale > 0) {
+                        const shadowY = drawY + drawH - (size * 0.1) + ((config.shadowY || 0) * camera.zoom);
+                        const shadowX = x + (config.shiftX * camera.zoom) + ((config.shadowX || 0) * camera.zoom);
+                        ctx.beginPath();
+                        ctx.ellipse(shadowX, shadowY, drawW * 0.3 * config.shadowScale, drawH * 0.1 * config.shadowScale, 0, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(0, 0, 0, ${config.shadowOpacity ?? 0.3})`;
+                        ctx.fill();
+                    }
+
+                    ctx.drawImage(sprite, drawX, drawY, drawW, drawH);
+                    improvementDrawnAsSprite = true;
+                }
+            }
+
+            if (!improvementDrawnAsSprite) {
+                const impEmoji = improvementEmojis[tile.improvement] || '';
+                if (impEmoji) {
+                    ctx.fillText(impEmoji, x, y + isoOffset);
+                }
+            }
+
+            // --- RENDER IMPROVEMENT LEVEL PIPS ---
+            if (tile.improvementLevel > 1) {
+                const level = tile.improvementLevel;
+                ctx.fillStyle = '#fbbf24';
+                const pipSize = size * 0.15;
+                const startX = x + size * 0.4;
+                const startY = y + isoOffset;
+
+                for (let i = 0; i < level; i++) {
+                    ctx.beginPath();
+                    ctx.arc(startX, startY - (i * pipSize * 1.2) + (level * pipSize * 0.5), pipSize / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke(); 
+                }
+            }
+        }
+
+        // --- 2. RENDER RESOURCES (LAYER 2 - ON TOP) ---
         if (tile.resource !== ResourceType.NONE && !tile.isHidden) {
             
+            let resourceDrawnAsSprite = false;
+
             // EXCEPTION: Wood in Forest is visualized by the procedural terrain itself.
             if (tile.terrain === TerrainType.FOREST && tile.resource === ResourceType.WOOD) {
                 resourceDrawnAsSprite = true; 
@@ -158,7 +232,8 @@ export function drawTileContent(
             // ANIMATED LIVESTOCK (WOOL, MEAT)
             else if (tile.resource === ResourceType.WOOL || tile.resource === ResourceType.MEAT) {
                 if (assets.animalSpriteSheet) {
-                    animalManager.drawAnimals(ctx, hex, x, y + isoOffset, size, tile.resource, assets);
+                    const hasRanch = tile.improvement === ImprovementType.RANCH;
+                    animalManager.drawAnimals(ctx, hex, x, y + isoOffset, size, tile.resource, assets, hasRanch);
                     resourceDrawnAsSprite = true;
                 }
             }
@@ -235,76 +310,6 @@ export function drawTileContent(
             if (!resourceDrawnAsSprite) {
                 const resEmoji = resourceEmojis[tile.resource];
                 ctx.fillText(resEmoji, x - size * 0.3, y + isoOffset);
-            }
-        }
-
-        // --- 2. RENDER IMPROVEMENTS ---
-        if (tile.improvement !== ImprovementType.NONE &&
-            ![ImprovementType.ROAD, ImprovementType.RAILROAD, ImprovementType.CITY].includes(tile.improvement)) {
-
-            let improvementDrawnAsSprite = false;
-            let spriteKey = '';
-
-            // Determine Sprite Key based on Improvement Type
-            if (tile.improvement === ImprovementType.DEPOT) spriteKey = 'STR_depot';
-            else if (tile.improvement === ImprovementType.PORT) spriteKey = 'STR_port';
-            else if (tile.improvement === ImprovementType.MINE) spriteKey = 'STR_mine';
-            else if (tile.improvement === ImprovementType.FARM) spriteKey = 'STR_farm';
-            else if (tile.improvement === ImprovementType.LUMBER_MILL) spriteKey = 'STR_lumber_mill';
-            else if (tile.improvement === ImprovementType.OIL_WELL) spriteKey = 'STR_oil_well';
-            else if (tile.improvement === ImprovementType.PLANTATION) {
-                if (tile.resource === ResourceType.COTTON) spriteKey = 'STR_plantation_cotton';
-                else if (tile.resource === ResourceType.FRUIT) spriteKey = 'STR_plantation_fruit';
-                else spriteKey = 'STR_plantation'; // Fallback / Generic
-            }
-
-            if (spriteKey) {
-                const sprite = assets.getStructureSprite(spriteKey.replace('STR_', ''));
-                
-                if (sprite) {
-                    const config = assets.getConfig(spriteKey);
-                    const shouldDrawShadow = config.drawShadow ?? true;
-                    const aspect = sprite.width / sprite.height;
-                    const drawH = size * 1.5 * config.scale;
-                    const drawW = drawH * aspect;
-                    const drawY = y + isoOffset - drawH + (size * 1.1) + (config.shiftY * camera.zoom);
-                    const drawX = x - drawW / 2 + (config.shiftX * camera.zoom);
-                    
-                    if (shouldDrawShadow && config.shadowScale > 0) {
-                        const shadowY = drawY + drawH - (size * 0.1) + ((config.shadowY || 0) * camera.zoom);
-                        const shadowX = x + (config.shiftX * camera.zoom) + ((config.shadowX || 0) * camera.zoom);
-                        ctx.beginPath();
-                        ctx.ellipse(shadowX, shadowY, drawW * 0.3 * config.shadowScale, drawH * 0.1 * config.shadowScale, 0, 0, Math.PI * 2);
-                        ctx.fillStyle = `rgba(0, 0, 0, ${config.shadowOpacity ?? 0.3})`;
-                        ctx.fill();
-                    }
-
-                    ctx.drawImage(sprite, drawX, drawY, drawW, drawH);
-                    improvementDrawnAsSprite = true;
-                }
-            }
-
-            if (!improvementDrawnAsSprite) {
-                const impEmoji = improvementEmojis[tile.improvement] || '';
-                if (impEmoji) {
-                    ctx.fillText(impEmoji, x, y + isoOffset);
-                }
-            }
-
-            // --- 3. RENDER IMPROVEMENT LEVEL ---
-            if (tile.improvementLevel > 1) {
-                const level = tile.improvementLevel;
-                ctx.fillStyle = '#fbbf24';
-                const pipSize = size * 0.15;
-                const startX = x + size * 0.4;
-                const startY = y + isoOffset;
-
-                for (let i = 0; i < level; i++) {
-                    ctx.beginPath();
-                    ctx.arc(startX, startY - (i * pipSize * 1.2) + (level * pipSize * 0.5), pipSize / 2, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke(); 
-                }
             }
         }
     };

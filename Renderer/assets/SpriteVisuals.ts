@@ -69,4 +69,6 @@ export const PRESET_CONFIGS: Record<string, Partial<SpriteVisualConfig>> = {
   "STR_port": { "scale": 1.2, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.2, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
   "STR_plantation_cotton": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
   "STR_plantation_fruit": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
+  "STR_ranch_wool": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
+  "STR_ranch_livestock": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
 };
