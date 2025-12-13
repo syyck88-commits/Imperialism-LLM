@@ -129,7 +129,8 @@ export function drawTileContent(
     camera: Camera, 
     hexSize: number, 
     assets: AssetManager,
-    animalManager: AnimalManager
+    animalManager: AnimalManager,
+    includeAnimals: boolean = true
 ) {
     return (ctx: CanvasRenderingContext2D) => {
         // x, y are already screen coordinates
@@ -231,10 +232,14 @@ export function drawTileContent(
             
             // ANIMATED LIVESTOCK (WOOL, MEAT)
             else if (tile.resource === ResourceType.WOOL || tile.resource === ResourceType.MEAT) {
-                if (assets.animalSpriteSheet) {
+                if (includeAnimals && assets.animalSpriteSheet) {
                     const hasRanch = tile.improvement === ImprovementType.RANCH;
                     animalManager.drawAnimals(ctx, hex, x, y + isoOffset, size, tile.resource, assets, hasRanch);
                     resourceDrawnAsSprite = true;
+                } else if (!includeAnimals) {
+                    // In cached mode, don't draw animals.
+                    // We simply don't render anything here, expecting real-time pass to handle it.
+                    resourceDrawnAsSprite = true; 
                 }
             }
             

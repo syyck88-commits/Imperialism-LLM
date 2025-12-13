@@ -1,5 +1,4 @@
 
-
 import { Hex, axialToOffset, offsetToAxial, getHexNeighbors, hexToString, getHexDistance } from './HexMath';
 
 // --- Enums for Map Layers ---
@@ -70,13 +69,12 @@ export interface TileData {
   isProspected: boolean; // Has a prospector checked this tile?
 }
 
+// Event types
+export type TileChangeListener = (q: number, r: number, data: Partial<TileData>) => void;
+
 /**
  * GameMap
  * Handles the game world data using flat arrays for performance.
- * 
- * Coordinate System:
- * - Internal storage: Odd-R Offset Coordinates (col, row) mapped to 1D index.
- * - Public API: Axial Coordinates (q, r).
  */
 export class GameMap {
   public readonly width: number;
@@ -91,6 +89,8 @@ export class GameMap {
   private owner: Uint8Array;
   private isHidden: Uint8Array; // Separate array for booleans (0/1)
   private isProspected: Uint8Array; // 0/1
+
+  private listeners: TileChangeListener[] = [];
 
   constructor(width: number, height: number) {
     this.width = width;
@@ -107,6 +107,16 @@ export class GameMap {
     this.isProspected = new Uint8Array(this.size);
 
     this.generateMap();
+  }
+
+  public onTileChanged(callback: TileChangeListener) {
+      this.listeners.push(callback);
+  }
+
+  private notifyChange(q: number, r: number, data: Partial<TileData>) {
+      for (const listener of this.listeners) {
+          listener(q, r, data);
+      }
   }
 
   /**
@@ -183,6 +193,8 @@ export class GameMap {
     if (data.owner !== undefined) this.owner[idx] = data.owner;
     if (data.isHidden !== undefined) this.isHidden[idx] = data.isHidden ? 1 : 0;
     if (data.isProspected !== undefined) this.isProspected[idx] = data.isProspected ? 1 : 0;
+
+    this.notifyChange(q, r, data);
   }
 
   // --- Generation Logic ---

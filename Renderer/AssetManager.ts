@@ -11,6 +11,7 @@ import {
     BLOCK_DEPTH 
 } from './assets/AssetGenerators';
 import { SpriteVisualConfig, DEFAULT_SPRITE_CONFIG, PRESET_CONFIGS } from './assets/SpriteVisuals';
+import { unzip } from 'fflate';
 
 export class AssetManager {
   private readonly ATLAS_COLS = 3;
@@ -22,6 +23,13 @@ export class AssetManager {
   public animalSpriteSheet: HTMLImageElement | null = null;
   public isAtlasLoaded: boolean = false;
   
+  // PAK File Storage
+  private fileMap: Map<string, string> = new Map();
+
+  // Static Cache to prevent re-downloading/unzipping on React re-renders
+  private static globalFileMap: Map<string, string> = new Map();
+  private static globalLoadPromise: Promise<void> | null = null;
+
   // Specific Sprites Storage
   private loadedSprites: Map<TerrainType, HTMLImageElement> = new Map();
   public baseSprites: Map<string, HTMLImageElement> = new Map();
@@ -107,6 +115,9 @@ export class AssetManager {
   public setConfig(key: string, config: SpriteVisualConfig) {
       this.spriteConfigs.set(key, config);
       this.saveConfigs();
+      
+      // Notify listeners (ChunkManager) that visual config changed
+      window.dispatchEvent(new CustomEvent('SPRITE_CONFIG_CHANGED', { detail: { key } }));
   }
 
   private saveConfigs() {
@@ -119,19 +130,14 @@ export class AssetManager {
       return this.spriteConfigs;
   }
 
-  // Helper to extract image source for UI preview
   public getSpriteImageSource(key: string): string | null {
       let img: HTMLImageElement | undefined;
 
-      // Special handling for Animals (Sheet)
-      // Check ID explicitly
       if (key.startsWith('RES_')) {
           const id = parseInt(key.replace('RES_', ''));
-          
           if (id === ResourceType.MEAT || id === ResourceType.WOOL) {
               if (this.animalSpriteSheet) return this.animalSpriteSheet.src;
           }
-          
           img = this.resourceSprites.get(id as ResourceType);
       } 
       else if (key.startsWith('UNIT_')) {
@@ -146,66 +152,127 @@ export class AssetManager {
       return img ? img.src : null;
   }
 
-  // Method A: Auto-Loading Local Assets (Blobs)
+  // --- PAK Loading Logic ---
+
+  private async unpackSprites() {
+      // 1. Check Static Cache first (Fastest)
+      if (AssetManager.globalFileMap.size > 0) {
+          console.log("Using cached sprites.pak data.");
+          this.fileMap = new Map(AssetManager.globalFileMap);
+          return;
+      }
+
+      // 2. Check if already loading (prevent parallel downloads)
+      if (AssetManager.globalLoadPromise) {
+          console.log("Waiting for sprites.pak download...");
+          await AssetManager.globalLoadPromise;
+          this.fileMap = new Map(AssetManager.globalFileMap);
+          return;
+      }
+
+      // 3. Start Loading
+      AssetManager.globalLoadPromise = (async () => {
+          try {
+              console.log("Downloading and unpacking sprites.pak...");
+              const response = await fetch('/sprites.pak');
+              if (!response.ok) {
+                  // Silent fallback if missing
+                  return;
+              }
+              
+              const buffer = await response.arrayBuffer();
+              const data = new Uint8Array(buffer);
+              
+              const files = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+                  unzip(data, (err, unzipped) => {
+                      if (err) return reject(err);
+                      resolve(unzipped);
+                  });
+              });
+              
+              let count = 0;
+              for (const [filename, content] of Object.entries(files)) {
+                  // Normalize path: strip 'sprites/' prefix if present
+                  const cleanName = filename.replace(/^sprites\//, '');
+                  
+                  if (cleanName.endsWith('.png')) {
+                      const blob = new Blob([content], { type: 'image/png' });
+                      const url = URL.createObjectURL(blob);
+                      AssetManager.globalFileMap.set(cleanName, url);
+                      count++;
+                  }
+              }
+              console.log(`Unpacked ${count} sprites from sprites.pak to Global Cache`);
+          } catch (e) {
+              console.warn("Failed to load/unpack sprites.pak, falling back to procedural/individual loading.", e);
+          }
+      })();
+
+      await AssetManager.globalLoadPromise;
+      this.fileMap = new Map(AssetManager.globalFileMap);
+  }
+
+  private async fetchImage(path: string): Promise<HTMLImageElement | null> {
+      let url = this.fileMap.get(path);
+      
+      // Fallback for cases where zip might not be flat
+      if (!url && !path.startsWith('sprites/')) {
+           url = this.fileMap.get(`sprites/${path}`);
+      }
+
+      if (!url) {
+          // If NOT found in PAK, try fetching normally (maybe it's external, like terrain_atlas)
+          // But only if it looks like a relative root path
+          if (path.startsWith('/')) {
+              try {
+                  const response = await fetch(path);
+                  if (response.ok) {
+                      const blob = await response.blob();
+                      url = URL.createObjectURL(blob);
+                  }
+              } catch (e) { return null; }
+          }
+      }
+
+      if (!url) return null;
+
+      return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = url!;
+      });
+  }
+
+  // Method A: Auto-Loading Assets (from PAK or Fetch)
   private async loadAssets() {
+      await this.unpackSprites();
+
       // 0. Load Base Tiles
       const baseFiles = ['base_land', 'base_water', 'base_desert'];
       const basePromises = baseFiles.map(async (name) => {
-          try {
-              const response = await fetch(`/sprites/${name}.png`);
-              if (!response.ok) return;
-              const blob = await response.blob();
-              const img = new Image();
-              img.src = URL.createObjectURL(blob);
-              await img.decode();
-              this.baseSprites.set(name, img);
-          } catch (e) {
-              // Ignore
-          }
+          const img = await this.fetchImage(`${name}.png`);
+          if (img) this.baseSprites.set(name, img);
       });
 
       // 0.5 Load Forest Sprites (forest_1 to forest_4)
       const forestPromises = [1, 2, 3, 4].map(async (idx) => {
-          try {
-              const response = await fetch(`/sprites/forest/forest_${idx}.png`);
-              if (!response.ok) return;
-              const blob = await response.blob();
-              const img = new Image();
-              img.src = URL.createObjectURL(blob);
-              await img.decode();
-              this.forestSprites[idx - 1] = img;
-          } catch (e) {
-              // Keep fallback
-          }
+          const img = await this.fetchImage(`forest/forest_${idx}.png`);
+          if (img) this.forestSprites[idx - 1] = img;
       });
 
-      // 1. Load Atlas
-      try {
-          const response = await fetch('/terrain_atlas.png');
-          if (response.ok) {
-              const blob = await response.blob();
-              const img = new Image();
-              img.src = URL.createObjectURL(blob);
-              await img.decode();
-              this.externalAtlas = img;
-              this.isAtlasLoaded = true;
-          }
-      } catch (e) {
-          this.isAtlasLoaded = false;
+      // 1. Load Atlas (Root file, likely not in PAK or if yes, handled by fetchImage)
+      // Note: fetchImage handles absolute paths via fetch fallback
+      const atlasImg = await this.fetchImage('/terrain_atlas.png');
+      if (atlasImg) {
+          this.externalAtlas = atlasImg;
+          this.isAtlasLoaded = true;
       }
       
-      // 1.5 Load Animal Sheet
-      try {
-          const response = await fetch('/sprites/res/sprite_sh.png');
-          if (response.ok) {
-              const blob = await response.blob();
-              const img = new Image();
-              img.src = URL.createObjectURL(blob);
-              await img.decode();
-              this.animalSpriteSheet = img;
-          }
-      } catch (e) {
-          // Ignore
+      // 1.5 Load Animal Sheet (in sprites/res)
+      const animalImg = await this.fetchImage('res/sprite_sh.png');
+      if (animalImg) {
+          this.animalSpriteSheet = animalImg;
       }
 
       // 2. Load Specific Sprites (Terrain)
@@ -220,21 +287,8 @@ export class AssetManager {
 
       const terrainPromises = Object.entries(terrainFiles).map(async ([typeVal, name]) => {
           const type = Number(typeVal) as TerrainType;
-          try {
-              const response = await fetch(`/sprites/${name}.png`);
-              if (!response.ok) return; 
-              
-              const blob = await response.blob();
-              const objectUrl = URL.createObjectURL(blob);
-              
-              const img = new Image();
-              img.src = objectUrl;
-              await img.decode(); 
-              
-              this.loadedSprites.set(type, img);
-          } catch (e) {
-              // Ignore missing sprites
-          }
+          const img = await this.fetchImage(`${name}.png`);
+          if (img) this.loadedSprites.set(type, img);
       });
 
       // 3. Load Unit Sprites
@@ -251,21 +305,8 @@ export class AssetManager {
 
       const unitPromises = Object.entries(unitFiles).map(async ([typeVal, name]) => {
           const type = typeVal as UnitType;
-          try {
-              const response = await fetch(`/sprites/${name}.png`);
-              if (!response.ok) return;
-              
-              const blob = await response.blob();
-              const objectUrl = URL.createObjectURL(blob);
-              
-              const img = new Image();
-              img.src = objectUrl;
-              await img.decode();
-              
-              this.unitSprites.set(type, img);
-          } catch (e) {
-              // Ignore
-          }
+          const img = await this.fetchImage(`${name}.png`);
+          if (img) this.unitSprites.set(type, img);
       });
 
       // 4. Load Structure Sprites
@@ -274,7 +315,6 @@ export class AssetManager {
           'depot': 'depo',
           'plantation': 'orchard', // Generic fallback
           
-          // New Resource Buildings
           'farm': 'res_build/wheat',
           'mine': 'res_build/mine',
           'lumber_mill': 'res_build/forester_hatch',
@@ -283,27 +323,13 @@ export class AssetManager {
           'plantation_cotton': 'res_build/cotton',
           'plantation_fruit': 'res_build/fruit',
           
-          // Added Ranch
           'ranch_wool': 'res_build/wool',
           'ranch_livestock': 'res_build/live_stock'
       };
 
       const structurePromises = Object.entries(structureFiles).map(async ([key, name]) => {
-          try {
-              const response = await fetch(`/sprites/${name}.png`);
-              if (!response.ok) return;
-              
-              const blob = await response.blob();
-              const objectUrl = URL.createObjectURL(blob);
-              
-              const img = new Image();
-              img.src = objectUrl;
-              await img.decode();
-              
-              this.structureSprites.set(key, img);
-          } catch (e) {
-              // Ignore
-          }
+          const img = await this.fetchImage(`${name}.png`);
+          if (img) this.structureSprites.set(key, img);
       });
       
       // 5. Load Resource Sprites
@@ -321,20 +347,8 @@ export class AssetManager {
 
       const resPromises = Object.entries(resFiles).map(async ([typeVal, name]) => {
           const type = Number(typeVal) as ResourceType;
-          try {
-              const response = await fetch(`/sprites/res/${name}.png`);
-              if (!response.ok) return;
-              
-              const blob = await response.blob();
-              const objectUrl = URL.createObjectURL(blob);
-              
-              const img = new Image();
-              img.src = objectUrl;
-              
-              this.resourceSprites.set(type, img);
-          } catch (e) {
-              // Ignore
-          }
+          const img = await this.fetchImage(`res/${name}.png`);
+          if (img) this.resourceSprites.set(type, img);
       });
       
       await Promise.all([

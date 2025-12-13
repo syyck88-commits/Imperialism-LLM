@@ -130,6 +130,29 @@ export class OverlayDrawer {
         ctx.restore();
     }
 
+    public static drawValidMoves(
+        ctx: CanvasRenderingContext2D,
+        camera: Camera,
+        hexSize: number,
+        assets: AssetManager,
+        validMoves: Hex[]
+    ) {
+        if (validMoves.length === 0) return;
+
+        const currentHexSize = hexSize * camera.zoom;
+        const uiDrawW = Math.ceil(Math.sqrt(3) * currentHexSize);
+        const uiDrawH = Math.ceil((2 * currentHexSize * ISO_FACTOR) + 4);
+
+        for (const hex of validMoves) {
+            const { x, y } = hexToScreen(hex.q, hex.r, camera, hexSize);
+            ctx.drawImage(
+                assets.uiSprites,
+                assets.uiMap.move.x * assets.uiTileW, 0, assets.uiTileW, assets.uiTileH,
+                x - uiDrawW/2, y - uiDrawH/2, uiDrawW, uiDrawH
+            );
+        }
+    }
+
     private static isCollectionCenter(map: GameMap, hex: Hex): boolean {
         const tile = map.getTile(hex.q, hex.r);
         if (!tile) return false;
