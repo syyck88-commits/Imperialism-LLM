@@ -73,6 +73,10 @@ export function drawForestTile(
         const size = hexSize * camera.zoom;
         
         const hasRoad = tile.improvement === ImprovementType.ROAD || tile.improvement === ImprovementType.RAILROAD;
+        // Check for buildings to clear space (Lumber Mill, Mine, etc.)
+        const hasBuilding = tile.improvement !== ImprovementType.NONE && 
+                            tile.improvement !== ImprovementType.ROAD && 
+                            tile.improvement !== ImprovementType.RAILROAD;
 
         let depth = 1;
         if (forestData) {
@@ -108,6 +112,14 @@ export function drawForestTile(
             spreadMult = 0.9; 
         }
 
+        // If there is a building, clear the forest significantly
+        if (hasBuilding) {
+            minTrees = 1;
+            randomAdd = 2;
+            sizeMultiplier = 0.6;
+            spreadMult = 1.1; // Push to edges
+        }
+
         const treeCount = minTrees + Math.floor(rng(0) * randomAdd);
 
         // Calculate Wind Noise for this Hex
@@ -131,8 +143,9 @@ export function drawForestTile(
             const angle = rng(i + 1) * Math.PI * 2;
             let distBase = Math.sqrt(rng(i + 2));
 
-            if (hasRoad) {
-                distBase = 0.4 + (distBase * 0.6);
+            if (hasRoad || hasBuilding) {
+                // Push trees away from center
+                distBase = 0.5 + (distBase * 0.5);
             }
 
             const dist = distBase * (size * spreadMult);

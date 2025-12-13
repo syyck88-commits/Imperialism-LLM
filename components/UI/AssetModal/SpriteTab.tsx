@@ -30,11 +30,21 @@ const spriteCategories = {
         { key: `UNIT_${UnitType.MINER}`, label: 'Шахтер' },
         { key: `UNIT_${UnitType.FARMER}`, label: 'Фермер' },
         { key: `UNIT_${UnitType.PROSPECTOR}`, label: 'Геолог' },
+        { key: `UNIT_${UnitType.RANCHER}`, label: 'Пастух' },
+        { key: `UNIT_${UnitType.FORESTER}`, label: 'Лесник' },
+        { key: `UNIT_${UnitType.DRILLER}`, label: 'Буровик' },
     ],
     STRUCT: [
         { key: 'STR_capital', label: 'Столица' },
         { key: 'STR_depot', label: 'Депо' },
-        { key: 'STR_plantation', label: 'Плантация' },
+        { key: 'STR_port', label: 'Порт' },
+        { key: 'STR_mine', label: 'Шахта' },
+        { key: 'STR_farm', label: 'Ферма' },
+        { key: 'STR_lumber_mill', label: 'Лесопилка' },
+        { key: 'STR_oil_well', label: 'Нефтяная вышка' },
+        { key: 'STR_plantation', label: 'Плантация (Общ.)' },
+        { key: 'STR_plantation_cotton', label: 'Плантация (Хлопок)' },
+        { key: 'STR_plantation_fruit', label: 'Плантация (Фрукты)' },
     ]
 };
 

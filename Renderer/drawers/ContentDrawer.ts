@@ -150,8 +150,13 @@ export function drawTileContent(
         // --- 1. RENDER RESOURCES ---
         if (tile.resource !== ResourceType.NONE && !tile.isHidden) {
             
+            // EXCEPTION: Wood in Forest is visualized by the procedural terrain itself.
+            if (tile.terrain === TerrainType.FOREST && tile.resource === ResourceType.WOOD) {
+                resourceDrawnAsSprite = true; 
+            }
+            
             // ANIMATED LIVESTOCK (WOOL, MEAT)
-            if (tile.resource === ResourceType.WOOL || tile.resource === ResourceType.MEAT) {
+            else if (tile.resource === ResourceType.WOOL || tile.resource === ResourceType.MEAT) {
                 if (assets.animalSpriteSheet) {
                     animalManager.drawAnimals(ctx, hex, x, y + isoOffset, size, tile.resource, assets);
                     resourceDrawnAsSprite = true;
@@ -226,32 +231,6 @@ export function drawTileContent(
                     resourceDrawnAsSprite = true;
                 }
             }
-
-            // Fallback: Fruit as Plantation
-            if (!resourceDrawnAsSprite && tile.resource === ResourceType.FRUIT) {
-                const sprite = assets.getStructureSprite('plantation');
-                if (sprite) {
-                    const config = assets.getConfig('STR_plantation');
-                    const shouldDrawShadow = config.drawShadow ?? true;
-                    const aspect = sprite.width / sprite.height;
-                    const drawH = size * 1.5 * config.scale;
-                    const drawW = drawH * aspect;
-                    const drawY = y + isoOffset - drawH + (size * 1.1) + (config.shiftY * camera.zoom);
-                    const drawX = x - drawW / 2 + (config.shiftX * camera.zoom);
-                    
-                    if (shouldDrawShadow && config.shadowScale > 0) {
-                        const shadowY = drawY + drawH - (size * 0.1) + ((config.shadowY || 0) * camera.zoom);
-                        const shadowX = x + (config.shiftX * camera.zoom) + ((config.shadowX || 0) * camera.zoom);
-                        ctx.beginPath();
-                        ctx.ellipse(shadowX, shadowY, drawW * 0.3 * config.shadowScale, drawH * 0.1 * config.shadowScale, 0, 0, Math.PI * 2);
-                        ctx.fillStyle = `rgba(0, 0, 0, ${config.shadowOpacity ?? 0.3})`;
-                        ctx.fill();
-                    }
-                    
-                    ctx.drawImage(sprite, drawX, drawY, drawW, drawH);
-                    resourceDrawnAsSprite = true;
-                }
-            }
             
             if (!resourceDrawnAsSprite) {
                 const resEmoji = resourceEmojis[tile.resource];
@@ -264,11 +243,26 @@ export function drawTileContent(
             ![ImprovementType.ROAD, ImprovementType.RAILROAD, ImprovementType.CITY].includes(tile.improvement)) {
 
             let improvementDrawnAsSprite = false;
-            
-            if (tile.improvement === ImprovementType.DEPOT) {
-                const sprite = assets.getStructureSprite('depot');
+            let spriteKey = '';
+
+            // Determine Sprite Key based on Improvement Type
+            if (tile.improvement === ImprovementType.DEPOT) spriteKey = 'STR_depot';
+            else if (tile.improvement === ImprovementType.PORT) spriteKey = 'STR_port';
+            else if (tile.improvement === ImprovementType.MINE) spriteKey = 'STR_mine';
+            else if (tile.improvement === ImprovementType.FARM) spriteKey = 'STR_farm';
+            else if (tile.improvement === ImprovementType.LUMBER_MILL) spriteKey = 'STR_lumber_mill';
+            else if (tile.improvement === ImprovementType.OIL_WELL) spriteKey = 'STR_oil_well';
+            else if (tile.improvement === ImprovementType.PLANTATION) {
+                if (tile.resource === ResourceType.COTTON) spriteKey = 'STR_plantation_cotton';
+                else if (tile.resource === ResourceType.FRUIT) spriteKey = 'STR_plantation_fruit';
+                else spriteKey = 'STR_plantation'; // Fallback / Generic
+            }
+
+            if (spriteKey) {
+                const sprite = assets.getStructureSprite(spriteKey.replace('STR_', ''));
+                
                 if (sprite) {
-                    const config = assets.getConfig('STR_depot');
+                    const config = assets.getConfig(spriteKey);
                     const shouldDrawShadow = config.drawShadow ?? true;
                     const aspect = sprite.width / sprite.height;
                     const drawH = size * 1.5 * config.scale;
@@ -286,19 +280,14 @@ export function drawTileContent(
                     }
 
                     ctx.drawImage(sprite, drawX, drawY, drawW, drawH);
-                    
                     improvementDrawnAsSprite = true;
                 }
             }
 
             if (!improvementDrawnAsSprite) {
-                const shouldDrawEmoji = !(tile.resource === ResourceType.FRUIT && tile.improvement === ImprovementType.PLANTATION);
-                
-                if (shouldDrawEmoji) {
-                    const impEmoji = improvementEmojis[tile.improvement] || '';
-                    if (impEmoji) {
-                        ctx.fillText(impEmoji, x, y + isoOffset);
-                    }
+                const impEmoji = improvementEmojis[tile.improvement] || '';
+                if (impEmoji) {
+                    ctx.fillText(impEmoji, x, y + isoOffset);
                 }
             }
 

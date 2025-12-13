@@ -40,7 +40,18 @@ export const PRESET_CONFIGS: Record<string, Partial<SpriteVisualConfig>> = {
   "STR_capital": { "scale": 1.15, "shiftX": 0, "shiftY": 26, "drawShadow": false, "shadowScale": 1.3, "shadowX": 0, "shadowY": -74, "shadowOpacity": 0.55, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
   "STR_depot": { "scale": 1, "shiftX": 0, "shiftY": 0, "drawShadow": false, "shadowScale": 1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
   "STR_plantation": { "scale": 1, "shiftX": 0, "shiftY": 0, "drawShadow": true, "shadowScale": 1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
-  "UNIT_Soldier": { "scale": 1, "shiftX": 0, "shiftY": 0, "drawShadow": true, "shadowScale": 1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  
+  // Units
+  "UNIT_Soldier": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  "UNIT_Engineer": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  "UNIT_Miner": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  "UNIT_Prospector": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  "UNIT_Farmer": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  "UNIT_Forester": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  "UNIT_Rancher": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+  "UNIT_Driller": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
+
+  // Resources
   "RES_3": { "scale": 1, "shiftX": 0, "shiftY": 0, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": -7, "shadowOpacity": 0.55, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
   "RES_4": { "scale": 1, "shiftX": 0, "shiftY": 0, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": -7, "shadowOpacity": 0.55, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
   "RES_5": { "scale": 1, "shiftX": 0, "shiftY": 0, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": -7, "shadowOpacity": 0.55, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
@@ -49,8 +60,13 @@ export const PRESET_CONFIGS: Record<string, Partial<SpriteVisualConfig>> = {
   "RES_7": { "scale": 0.6, "shiftX": 0, "shiftY": 17, "drawShadow": true, "shadowScale": 0.6, "shadowX": 0, "shadowY": -3, "shadowOpacity": 0.4, "clumpMin": 15, "clumpMax": 20, "clumpSpread": 1.4 },
   "RES_6": { "scale": 1, "shiftX": 0, "shiftY": 7, "drawShadow": true, "shadowScale": 0.8, "shadowX": 0, "shadowY": 3, "shadowOpacity": 0.3, "clumpMin": 12, "clumpMax": 20, "clumpSpread": 2 },
   "RES_8": { "scale": 0.6, "shiftX": 0, "shiftY": 10, "drawShadow": true, "shadowScale": 1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3, "clumpMin": 3, "clumpMax": 20, "clumpSpread": 2 },
-  "UNIT_Engineer": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
-  "UNIT_Miner": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
-  "UNIT_Prospector": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 },
-  "UNIT_Farmer": { "scale": 1, "shiftX": 0, "shiftY": 14, "drawShadow": true, "shadowScale": 0.7, "shadowX": 0, "shadowY": 20, "shadowOpacity": 0.3, "clumpMin": 0, "clumpMax": 0, "clumpSpread": 1 }
+  
+  // New Building Presets
+  "STR_mine": { "scale": 1.2, "shiftX": 0, "shiftY": -10, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
+  "STR_farm": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.2, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
+  "STR_lumber_mill": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.4 },
+  "STR_oil_well": { "scale": 1.3, "shiftX": 0, "shiftY": -15, "drawShadow": true, "shadowScale": 0.8, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
+  "STR_port": { "scale": 1.2, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.2, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
+  "STR_plantation_cotton": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
+  "STR_plantation_fruit": { "scale": 1.1, "shiftX": 0, "shiftY": -5, "drawShadow": true, "shadowScale": 1.1, "shadowX": 0, "shadowY": 0, "shadowOpacity": 0.3 },
 };

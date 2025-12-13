@@ -55,7 +55,7 @@ export class TileDrawer {
         // Procedural Forest
         if (tile.terrain === TerrainType.FOREST) {
             contentBucket.push(() => drawForestTile(hex, tile, screenX, screenY, camera, hexSize, assets, forestData, time, windStrength)(ctx));
-            return;
+            // Removed return to allow improvements (Lumber Mill) to be drawn on top
         }
 
         // Normal Content

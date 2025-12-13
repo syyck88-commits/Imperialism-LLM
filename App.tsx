@@ -186,7 +186,7 @@ const App: React.FC = () => {
       updateWarnings();
   };
 
-  // Safe wrapper for modifying city state directly on the engine instance
+  // Safe wrapper for modify city state directly on the engine instance
   const runCityAction = (action: (city: City) => string | undefined) => {
       if (!gameRef.current) return;
       
@@ -216,7 +216,7 @@ const App: React.FC = () => {
       }
   };
 
-  // Helper for AssetModal
+  // Helper for AssetModal & UniversityModal
   const getConfig = (key: string) => gameRef.current?.getSpriteConfig(key) || DEFAULT_SPRITE_CONFIG;
   const setConfig = (key: string, cfg: SpriteVisualConfig) => gameRef.current?.setSpriteConfig(key, cfg);
   const getSpriteSource = (key: string) => gameRef.current?.getSpriteSource(key) || null;
@@ -367,6 +367,7 @@ const App: React.FC = () => {
               capital={capital}
               onClose={() => setShowUniversity(false)}
               onRecruit={(type) => handleRecruit(type)}
+              getSpriteSource={getSpriteSource}
           />
       )}
 

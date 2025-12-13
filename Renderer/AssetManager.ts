@@ -239,12 +239,14 @@ export class AssetManager {
 
       // 3. Load Unit Sprites
       const unitFiles: Record<string, string> = {
-          [UnitType.ENGINEER]: 'engineer',
-          [UnitType.FARMER]: 'farmer',
-          [UnitType.MINER]: 'miner',
-          [UnitType.PROSPECTOR]: 'prospector',
-          [UnitType.RANCHER]: 'rancher',
-          [UnitType.FORESTER]: 'forester'
+          [UnitType.ENGINEER]: 'units/engineer',
+          [UnitType.FARMER]: 'units/farmer',
+          [UnitType.MINER]: 'units/miner',
+          [UnitType.PROSPECTOR]: 'units/prospector',
+          [UnitType.RANCHER]: 'units/rancher',
+          [UnitType.FORESTER]: 'units/forester',
+          [UnitType.SOLDIER]: 'units/soldier',
+          [UnitType.DRILLER]: 'units/oilman'
       };
 
       const unitPromises = Object.entries(unitFiles).map(async ([typeVal, name]) => {
@@ -270,7 +272,16 @@ export class AssetManager {
       const structureFiles: Record<string, string> = {
           'capital': 'capitol',
           'depot': 'depo',
-          'plantation': 'orchard'
+          'plantation': 'orchard', // Generic fallback
+          
+          // New Resource Buildings
+          'farm': 'res_build/wheat',
+          'mine': 'res_build/mine',
+          'lumber_mill': 'res_build/forester_hatch',
+          'oil_well': 'res_build/oil_drill',
+          'port': 'res_build/port',
+          'plantation_cotton': 'res_build/cotton',
+          'plantation_fruit': 'res_build/fruit'
       };
 
       const structurePromises = Object.entries(structureFiles).map(async ([key, name]) => {

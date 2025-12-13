@@ -47,7 +47,8 @@ export class University {
 
         if (cost.expertLabor && city.workforce.expert < cost.expertLabor) return { success: false, message: "Нет свободных Экспертов (Expert Labor)." };
 
-        // 2. Tech Checks
+        // 2. Tech Checks (Temporarily disabled per request)
+        /*
         if (type === UnitType.RANCHER && !techs.has('Feed Grasses')) {
              return { success: false, message: "Требуется технология 'Feed Grasses'." };
         }
@@ -57,6 +58,7 @@ export class University {
         if (type === UnitType.DRILLER && !techs.has('Oil Drilling')) {
              return { success: false, message: "Требуется технология 'Oil Drilling'." };
         }
+        */
         
         // 3. Deduction
         if (cost.money) city.cash -= cost.money;
@@ -86,6 +88,9 @@ export class University {
             case UnitType.FORESTER:
             case UnitType.DRILLER:
                 unit = new ResourceImprover(nextId, type, spawnHex, city.ownerId);
+                break;
+            case UnitType.SOLDIER:
+                unit = new Unit(nextId, UnitType.SOLDIER, spawnHex, city.ownerId);
                 break;
             default:
                 // Fallback for soldiers or generics
