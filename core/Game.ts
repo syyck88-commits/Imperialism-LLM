@@ -1,6 +1,4 @@
 
-
-
 import { GameLoop } from './GameLoop';
 import { World } from './ECS';
 import { GameMap, ImprovementType, TerrainType, TileData, ResourceType } from '../Grid/GameMap';
@@ -16,6 +14,9 @@ import { ISO_FACTOR } from '../Renderer/RenderUtils';
 
 import { CityManager } from './managers/CityManager';
 import { UnitManager } from './managers/UnitManager';
+import { ActionSystem } from './systems/ActionSystem';
+import { SimulationSystem } from './systems/SimulationSystem';
+
 import { HoverInfo, GameStateCallback } from './Types';
 export { HoverInfo, GameStateCallback };
 
@@ -33,6 +34,7 @@ export class Game {
   
   public cityManager: CityManager;
   public unitManager: UnitManager;
+  public actions: ActionSystem;
 
   public technologies: Set<string> = new Set(['Basic Tools']);
 
@@ -82,18 +84,38 @@ export class Game {
     this.world = new World();
     this.map = new GameMap(100, 100);
     this.transportNetwork = new TransportNetwork(this.map); 
+    
     // Set hexSize to match 128px width: width = size * sqrt(3) => size = 128 / sqrt(3)
     this.mapRenderer = new MapRenderer(this.map, 128 / Math.sqrt(3));
     this.pathfinder = new Pathfinder(this.map);
     
     this.cityManager = new CityManager(this.map, this.transportNetwork);
     this.unitManager = new UnitManager(this.map, this.pathfinder);
+    
+    // Initialize Systems
+    this.actions = new ActionSystem(this);
 
     this.input = new CameraInput(this, this.canvas);
     this.loop = new GameLoop(this.update.bind(this), this.render.bind(this));
 
     this.init();
   }
+
+  // --- Clone and Simulation Logic ---
+
+  /**
+   * Creates a deep clone of the game via the Simulation System.
+   * Useful for AI planning or "What If" scenarios.
+   */
+  public cloneDeep(): Game {
+      return SimulationSystem.createDeepClone(this);
+  }
+
+  public simulateTurn(unitActions: {unitId: string, action: string}[]): any {
+      return SimulationSystem.simulateTurn(this, unitActions);
+  }
+
+  // --- Initialization ---
 
   private async init() {
     this.reportLoading(0, "Анализ карты...");
@@ -180,30 +202,42 @@ export class Game {
       }
   }
 
+  // --- Getters & Proxies ---
+
   public get cities(): City[] { return this.cityManager.cities; }
   public get units(): Unit[] { return this.unitManager.units; }
   public get selectedUnit(): Unit | null { return this.unitManager.selectedUnit; }
   public get selectedHex(): Hex | null { return this.unitManager.selectedHex; }
 
+  // Action Proxies (Delegated to ActionSystem)
   public recruitUnit(type: UnitType): string {
-      if (this.cityManager.cities.length === 0) return "Нет столицы.";
-      const msg = this.unitManager.recruitUnit(type, this.cityManager.cities[0], this.turn, this.technologies);
-      this.triggerCapitalUpdate();
-      return msg;
+      return this.actions.recruitUnit(type);
   }
 
   public disbandSelectedUnit() {
-      this.unitManager.disbandSelectedUnit(this.cityManager.capital);
-      if (this.stateCallback) {
-          this.stateCallback.onSelectionChange(null);
-          this.triggerCapitalUpdate();
-      }
+      this.actions.disbandSelectedUnit();
   }
 
   public setCityProduction(resource: ResourceType, isActive: boolean) {
-      this.cityManager.setProduction(resource, isActive);
-      this.triggerCapitalUpdate();
+      this.actions.setCityProduction(resource, isActive);
   }
+
+  public doUnitAction(action: string) {
+      return this.actions.doUnitAction(action);
+  }
+
+  public doProspect() { return this.actions.doProspect(); }
+  public doBuildRoad() { return this.actions.doBuildRoad(); }
+  public doBuildDepot() { return this.actions.doBuildDepot(); }
+  public doBuildPort() { return this.actions.doBuildPort(); }
+  public doImproveResource() { return this.actions.doImproveResource(); }
+  public doBuyLand() { return this.actions.doBuyLand(); }
+  
+  public buildImprovement(type: ImprovementType) {
+      this.actions.buildImprovement(type);
+  }
+
+  // --- State & UI Interaction ---
 
   public getTransportOptions(): Map<ResourceType, number> {
       return this.cityManager.getTransportOptions();
@@ -305,61 +339,6 @@ export class Game {
     if (this.stateCallback) this.stateCallback.onSelectionChange(this.selectedUnit);
   }
 
-  public doProspect() {
-      const msg = this.unitManager.doProspect();
-      this.triggerSelectionUpdate();
-      return msg;
-  }
-
-  public doBuildRoad() {
-      if (this.cities.length === 0) return;
-      const msg = this.unitManager.doBuildRoad(this.cities[0]);
-      this.transportNetwork.markDirty();
-      this.triggerSelectionUpdate();
-      this.triggerCapitalUpdate(); 
-      return msg;
-  }
-
-  public doBuildDepot() {
-      if (this.cities.length === 0) return;
-      const msg = this.unitManager.doBuildDepot(this.cities[0]);
-      this.transportNetwork.markDirty();
-      this.triggerSelectionUpdate();
-      this.triggerCapitalUpdate();
-      return msg;
-  }
-
-  public doBuildPort() {
-      if (this.cities.length === 0) return;
-      const msg = this.unitManager.doBuildPort(this.cities[0]);
-      this.transportNetwork.markDirty();
-      this.triggerSelectionUpdate();
-      this.triggerCapitalUpdate();
-      return msg;
-  }
-
-  public doImproveResource() {
-      const msg = this.unitManager.doImproveResource(this.technologies);
-      this.triggerSelectionUpdate();
-      return msg;
-  }
-  
-  public doBuyLand() {
-      if (this.cities.length === 0) return;
-      const msg = this.unitManager.doBuyLand(this.cities[0]);
-      this.triggerSelectionUpdate();
-      this.triggerCapitalUpdate();
-      return msg;
-  }
-  
-  public buildImprovement(type: ImprovementType) {
-      if (this.cities.length > 0) {
-          this.unitManager.buildImprovement(type, this.cities[0]);
-          this.transportNetwork.markDirty();
-          this.triggerSelectionUpdate();
-      }
-  }
-
   public getGameStateAnalysis(): any {
       return analyzeGameState(this.map, this.cities, this.units, this.year);
   }
@@ -369,15 +348,19 @@ export class Game {
       return getStrategicAdvice(this.map, this.cities, this.transportNetwork);
   }
 
-  private triggerCapitalUpdate() {
+  // --- Exposed Callbacks for Sub-Systems ---
+
+  public triggerCapitalUpdate() {
       if (this.stateCallback && this.cities.length > 0) {
           this.stateCallback.onCapitalUpdate(this.cities[0]);
       }
   }
   
-  private triggerSelectionUpdate() {
+  public triggerSelectionUpdate() {
       if (this.stateCallback) this.stateCallback.onSelectionChange(this.selectedUnit);
   }
+
+  // --- Main Loop ---
 
   public start() {
     this.loop.start();

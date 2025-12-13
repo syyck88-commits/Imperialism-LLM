@@ -1,4 +1,5 @@
 
+
 import { Unit, UnitType } from '../Unit';
 import { GameMap } from '../../Grid/GameMap';
 import { Pathfinder } from '../../Grid/Pathfinding';
@@ -19,6 +20,16 @@ export class CivilianUnit extends Unit {
         super(id, type, location, ownerId);
     }
     
+    public override cloneDeep(): Unit {
+        // Call base cloneDeep to get the correct prototype and basic properties
+        const clone = super.cloneDeep() as CivilianUnit;
+        
+        // Deep copy the Set
+        clone.unreachableTargets = new Set(this.unreachableTargets);
+        
+        return clone;
+    }
+
     public doAutoTurn(
         map: GameMap, 
         pathfinder: Pathfinder, 

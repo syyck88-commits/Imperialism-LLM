@@ -1,7 +1,8 @@
 
+
 import { UnitType, Unit } from '../Unit';
 import { CivilianUnit } from './BaseCivilian';
-import { Hex, areHexesEqual, hexToString, getHexDistance } from '../../Grid/HexMath';
+import { Hex, areHexesEqual, hexToString, getHexDistance, getHexNeighbors } from '../../Grid/HexMath';
 import { GameMap, ImprovementType, ResourceType, TerrainType } from '../../Grid/GameMap';
 import { City } from '../City';
 import { Pathfinder } from '../../Grid/Pathfinding';
@@ -58,7 +59,6 @@ export class ResourceImprover extends CivilianUnit {
         if (tile && !tile.isHidden && this.canImproveResource(tile.resource, techs)) {
              if (this.autoTargetResource === 'ALL' || tile.resource === this.autoTargetResource) {
                  const isCompatible = this.isCompatibleImprovement(tile.improvement); 
-                 const hasInfrastructure = tile.improvement !== ImprovementType.NONE;
                  
                  // Logic: If NO improvement, we can build. If Infrastructure (Road), we can build. If Compatible (Mine lvl 1), we can upgrade.
                  // EXCEPTION: In Mountains, we explicitly require Infrastructure to already exist (Road or previous Mine).
@@ -90,21 +90,18 @@ export class ResourceImprover extends CivilianUnit {
 
         // 2. Find Target using AIHelpers
         if (!this.targetHex) {
-            const reservedHexes = new Set(
-                AIHelpers.getColleagueTargets(allUnits, this).map(h => hexToString(h))
-            );
+            // Get reserved hexes directly. Radius 0 means "don't touch my tile".
+            const reservedHexes = AIHelpers.getReservedHexes(allUnits, this, 0);
 
             this.targetHex = AIHelpers.findBestTarget(this, map, (hex, t) => {
-                // Filter
+                // Exclusions
                 if (reservedHexes.has(hexToString(hex))) return -Infinity;
                 if (t.isHidden) return -Infinity;
                 if (!this.canImproveResource(t.resource, techs)) return -Infinity;
                 if (this.autoTargetResource !== 'ALL' && t.resource !== this.autoTargetResource) return -Infinity;
 
-                // Constraint: Mountains MUST have Infrastructure (Road/Rail/Mine) to be a valid target for a Miner
+                // Constraint: Mountains MUST have Infrastructure (Road/Rail/Mine)
                 if (t.terrain === TerrainType.MOUNTAIN) {
-                    // Check if there is ANY improvement. 
-                    // If NONE, the miner can't go there (Pathfinder returns Infinity) AND shouldn't target it.
                     if (t.improvement === ImprovementType.NONE) {
                         return -Infinity; // Wait for Engineer
                     }
@@ -116,8 +113,36 @@ export class ResourceImprover extends CivilianUnit {
 
                 if (!isTarget) return -Infinity;
 
-                // Score: Closest is best
-                return -getHexDistance(this.location, hex);
+                // --- SCORING ---
+                let score = 5000;
+
+                // 1. Distance Penalty
+                const dist = getHexDistance(this.location, hex);
+                score -= (dist * 20);
+
+                // 2. Transport Network Bonus (STRATEGIC IMPORTANCE)
+                if (transportNetwork) {
+                    // Direct connection (Road/Rail exists) -> Massive Bonus (Instant Yield)
+                    if (transportNetwork.isConnectedToCapital(hex)) {
+                        score += 1500;
+                    } 
+                    else {
+                        // Neighbor connection -> Big Bonus (Cheap to connect, only 1 road needed)
+                        const neighbors = getHexNeighbors(hex);
+                        const isNearNet = neighbors.some(n => transportNetwork.isConnectedToCapital(n));
+                        if (isNearNet) {
+                            score += 800;
+                        }
+                    }
+                }
+
+                // 3. Resource Value Modifiers
+                if (t.resource === ResourceType.GOLD || t.resource === ResourceType.GEMS || t.resource === ResourceType.OIL) {
+                    score += 500;
+                }
+
+                return score;
+
             }, this.unreachableTargets); // Pass exclusion list
         }
 
@@ -155,7 +180,7 @@ export class ResourceImprover extends CivilianUnit {
             }
             return "Жду хода...";
         } else {
-            // Pathfinding failed! The target is likely unreachable (blocked by wild mountains or water).
+            // Pathfinding failed! The target is likely unreachable.
             if (this.targetHex) {
                 this.unreachableTargets.add(hexToString(this.targetHex));
                 this.targetHex = null;
@@ -171,15 +196,12 @@ export class ResourceImprover extends CivilianUnit {
         const tile = map.getTile(this.location.q, this.location.r);
         if (!tile) return "Ошибка карты.";
         
-        // Fix: In mountains, ANY improvement (Road, Rail, OR existing Mine) counts as infrastructure.
-        // We only fail if improvement is explicitly NONE.
         if (tile.terrain === TerrainType.MOUNTAIN && tile.improvement === ImprovementType.NONE) {
             return "В горах нужна дорога!";
         }
 
         let targetImp = ImprovementType.NONE;
         
-        // Mapping
         switch(this.type) {
             case UnitType.FARMER:
                 if (tile.resource === ResourceType.WHEAT) targetImp = ImprovementType.FARM;
@@ -195,8 +217,6 @@ export class ResourceImprover extends CivilianUnit {
 
         if (targetImp === ImprovementType.NONE) return "Неподходящий ресурс.";
         
-        // Check if we are building new or upgrading
-        // We can overwrite Road/Railroad/None with Level 1 Building
         const isInfrastructure = tile.improvement === ImprovementType.ROAD || 
                                  tile.improvement === ImprovementType.RAILROAD || 
                                  tile.improvement === ImprovementType.NONE;

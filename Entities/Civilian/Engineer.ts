@@ -59,7 +59,6 @@ export class Engineer extends CivilianUnit {
         if (!tile) return "Ошибка карты";
 
         // СТРОГОЕ ПРАВИЛО: Депо нельзя строить на стратегических ресурсах.
-        // Разрешено только: Пусто, Лес (лесопилка внутри депо условно), Скрытый ресурс.
         const canBuild = tile.resource === ResourceType.NONE || tile.resource === ResourceType.WOOD || tile.isHidden;
         
         if (!canBuild) {
@@ -103,6 +102,11 @@ export class Engineer extends CivilianUnit {
         }
         
         if (!this.canAfford(city, cost)) {
+            // Generate Machine-Readable Status for LLM
+            // Format: WAIT_RES:WOOD,STEEL|LOC:10,5
+            const missing = this.getMissingResString(city, cost);
+            this.debugStatus = `WAIT_RES:${missing}|LOC:${this.location.q},${this.location.r}`;
+            
             if (cost.money && city.cash < cost.money) return `Недостаточно средств ($${cost.money}).`;
             return "Недостаточно ресурсов.";
         }
@@ -127,6 +131,18 @@ export class Engineer extends CivilianUnit {
             }
         }
         return true;
+    }
+
+    private getMissingResString(city: City, cost: CostConfig): string {
+        const missing: string[] = [];
+        if (cost.money && city.cash < cost.money) missing.push("CASH");
+        if (cost.resources) {
+            for (const r of cost.resources) {
+                const stock = city.inventory.get(r.type) || 0;
+                if (stock < r.amount) missing.push(ResourceType[r.type]);
+            }
+        }
+        return missing.join(',');
     }
 
     // --- AUTOMATION AI ---
@@ -163,12 +179,14 @@ export class Engineer extends CivilianUnit {
                      transportNetwork.markDirty();
                      return report("Авто: Дорога (для Депо)");
                  } else {
-                     return report("Жду ресурсы (Дорога)");
+                     const missing = this.getMissingResString(capital, cost);
+                     return report(`WAIT_RES:${missing}|LOC:${this.location.q},${this.location.r}`);
                  }
             }
 
             // Normal Depot Build
-            if (this.canAfford(capital, GameConfig.INFRASTRUCTURE[ImprovementType.DEPOT])) {
+            const depotCost = GameConfig.INFRASTRUCTURE[ImprovementType.DEPOT];
+            if (this.canAfford(capital, depotCost)) {
                 const result = this.buildDepot(map, capital);
                 // Если постройка не удалась (например, из-за внезапного обнаружения ресурса), сбрасываем цель
                 if (!result.startsWith("Построено")) {
@@ -178,7 +196,8 @@ export class Engineer extends CivilianUnit {
                 transportNetwork.markDirty();
                 return report("Авто: Строю Депо");
             } else {
-                return report("Жду рес. (Депо)");
+                const missing = this.getMissingResString(capital, depotCost);
+                return report(`WAIT_RES:${missing}|LOC:${this.location.q},${this.location.r}`);
             }
         }
 
@@ -273,7 +292,7 @@ export class Engineer extends CivilianUnit {
 
         // Strict Check: Cannot build on productive resources (except Wood/None)
         const canBuild = tile.resource === ResourceType.NONE || tile.resource === ResourceType.WOOD || tile.isHidden;
-        if (!canBuild) return false; // Never build on top of Coal/Iron/Wheat
+        if (!canBuild) return false; 
 
         // Strict Terrain Check if Filter Enabled, UNLESS ignoring advice override
         const needs = getEmpireNeeds(capital);
@@ -283,7 +302,6 @@ export class Engineer extends CivilianUnit {
              return false;
         }
 
-        // In Mountain, improvement can be NONE (we will build road later), otherwise must be Road/Rail
         if (tile.improvement !== ImprovementType.NONE && tile.improvement !== ImprovementType.ROAD && tile.improvement !== ImprovementType.RAILROAD) return false;
         
         const isCrowded = AIHelpers.isImprovementNearby(map, this.location, 2, [ImprovementType.DEPOT, ImprovementType.CITY, ImprovementType.PORT]);
@@ -296,19 +314,16 @@ export class Engineer extends CivilianUnit {
             const t = map.getTile(n.q, n.r);
             if (t && t.resource !== ResourceType.NONE && !t.isHidden && !net.isConnectedToCapital(n)) {
                 
-                // PRIORITY OVERRIDE
                 if (!ignoringFilter && this.autoPriority !== 'GENERAL' && t.resource === this.autoPriority) {
                     return true;
                 }
                 
-                // CRISIS OVERRIDE
                 if (this.heedAdvice) {
                     if (needs.moneyCritical && [ResourceType.GOLD, ResourceType.GEMS].includes(t.resource)) return true;
                     if (needs.foodWarning && [ResourceType.WHEAT, ResourceType.FRUIT, ResourceType.MEAT, ResourceType.FISH].includes(t.resource)) return true;
                     if (needs.basicMaterials && [ResourceType.WOOD, ResourceType.COAL, ResourceType.IRON].includes(t.resource)) return true;
                 }
 
-                // High value for strategic
                 if ([ResourceType.COAL, ResourceType.IRON, ResourceType.GOLD, ResourceType.OIL, ResourceType.GEMS].includes(t.resource)) {
                     value += 3;
                 } else {
@@ -326,8 +341,10 @@ export class Engineer extends CivilianUnit {
         allUnits: Unit[],
         needs: any
     ): Hex | null {
-        const colleagueTargets = AIHelpers.getColleagueTargets(allUnits, this);
-        const reservedSet = new Set(colleagueTargets.map(h => hexToString(h)));
+        // Updated: Use 0 radius for general moves, as engineers can share paths, 
+        // but findBestDepotLocation handles the radius 2 exclusion for Depots.
+        // Here we just want to avoid going to the exact same tile someone else is working on.
+        const reservedSet = AIHelpers.getReservedHexes(allUnits, this, 0);
 
         const scoreFunction = (hex: Hex, tile: any): number => {
             if (reservedSet.has(hexToString(hex))) return -Infinity;
@@ -338,24 +355,18 @@ export class Engineer extends CivilianUnit {
             // --- ADVICE LOGIC ---
             if (this.heedAdvice) {
                 if (needs.moneyCritical) {
-                    // CRITICAL MONEY MODE: Only target valuable cash crops
                     overrideActive = true;
                     if (tile.resource !== ResourceType.GOLD && tile.resource !== ResourceType.GEMS) return -Infinity;
-                    
                     const dist = getHexDistance(capital.location, hex);
                     return 100000 - (dist * 10);
                 }
                 else if (needs.foodWarning) {
-                    // Start filtering for FOOD only
                     overrideActive = true;
-                    // If target is not food related, skip
                     if (tile.resource !== ResourceType.WHEAT && 
                         tile.resource !== ResourceType.FRUIT && 
                         tile.resource !== ResourceType.MEAT && 
                         tile.resource !== ResourceType.FISH && 
-                        tile.resource !== ResourceType.NONE) { // Allow empty tiles as bridges/depots
-                        // But wait, we evaluate the *neighbors* mostly for depots.
-                        // Simple check: If this tile HAS resource, is it food?
+                        tile.resource !== ResourceType.NONE) { 
                         if (!tile.isHidden && tile.resource !== ResourceType.NONE) {
                              if (![ResourceType.WHEAT, ResourceType.FRUIT, ResourceType.MEAT, ResourceType.FISH].includes(tile.resource)) return -Infinity;
                         }
@@ -371,7 +382,6 @@ export class Engineer extends CivilianUnit {
                 }
             }
 
-            // --- FILTER: TERRAIN (Only if no override) ---
             if (!overrideActive && this.terrainFilter !== 'ALL') {
                 if (tile.terrain !== this.terrainFilter) return -Infinity;
             }
@@ -383,14 +393,11 @@ export class Engineer extends CivilianUnit {
             const distToCap = getHexDistance(capital.location, hex);
 
             if (this.heedAdvice && needs.foodWarning && [ResourceType.WHEAT, ResourceType.FRUIT, ResourceType.MEAT].includes(tile.resource)) {
-                 // CRITICAL FOOD PRIORITY
                  score = 50000 - (distToCap * 10);
             } else if (this.heedAdvice && needs.basicMaterials && [ResourceType.WOOD, ResourceType.COAL, ResourceType.IRON].includes(tile.resource)) {
-                 // HIGH MAT PRIORITY
                  score = 40000 - (distToCap * 10);
             }
             else if (!overrideActive && this.autoPriority !== 'GENERAL') {
-                // STRICT USER PRIORITY
                 if (tile.resource === this.autoPriority && !tile.isHidden) {
                     const distToUnit = getHexDistance(this.location, hex);
                     score = 20000 - (distToUnit * 10);
@@ -398,7 +405,6 @@ export class Engineer extends CivilianUnit {
                     return -Infinity;
                 }
             } else {
-                // GENERAL MODE
                 if (hasResource || tile.improvement !== ImprovementType.NONE) {
                     score = 5000 - (distToCap * 20); 
                     
@@ -419,18 +425,16 @@ export class Engineer extends CivilianUnit {
 
         const target = AIHelpers.findBestTarget(this, map, scoreFunction);
 
-        // POST-PROCESSING TARGET:
         if (target) {
             const tile = map.getTile(target.q, target.r);
             if (tile) {
                 const canBuildDepotOnTarget = tile.resource === ResourceType.NONE || tile.resource === ResourceType.WOOD || tile.isHidden;
                 
                 if (!canBuildDepotOnTarget) {
-                    // Smart Adjustment: Find best neighbor spot
                     const smartSpot = AIHelpers.findOptimalDepotSpot(map, target, net);
                     if (smartSpot) {
                         this.intentToBuildDepot = true;
-                        return smartSpot; // Go to the neighbor instead
+                        return smartSpot; 
                     }
                 } else {
                     this.intentToBuildDepot = true;
@@ -459,7 +463,7 @@ export class Engineer extends CivilianUnit {
                 const savedTarget = this.targetHex; 
                 const savedIntent = this.intentToBuildDepot;
 
-                this.move([nextStep], cost); // Fix: Array of 1 step
+                this.move([nextStep], cost); 
                 this.isAutomated = true;
                 this.targetHex = savedTarget;
                 this.intentToBuildDepot = savedIntent;
@@ -478,7 +482,7 @@ export class Engineer extends CivilianUnit {
                     const savedTarget = this.targetHex;
                     const savedIntent = this.intentToBuildDepot;
                     
-                    this.move([nextStep], cost); // Fix: Array of 1 step
+                    this.move([nextStep], cost); 
                     this.isAutomated = true;
                     this.targetHex = savedTarget;
                     this.intentToBuildDepot = savedIntent;

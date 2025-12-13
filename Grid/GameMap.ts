@@ -109,6 +109,25 @@ export class GameMap {
     this.generateMap();
   }
 
+  /**
+   * Creates a deep copy of the GameMap state.
+   */
+  public cloneDeep(): GameMap {
+    // Create a new map instance (this will trigger generation, but we overwrite it immediately)
+    const clone = new GameMap(this.width, this.height);
+    
+    // Fast memory copy of all data layers
+    clone.terrain.set(this.terrain);
+    clone.resource.set(this.resource);
+    clone.improvement.set(this.improvement);
+    clone.improvementLevel.set(this.improvementLevel);
+    clone.owner.set(this.owner);
+    clone.isHidden.set(this.isHidden);
+    clone.isProspected.set(this.isProspected);
+
+    return clone;
+  }
+
   // --- Core Data Access ---
 
   /**

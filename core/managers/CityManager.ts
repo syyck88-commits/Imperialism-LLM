@@ -1,4 +1,5 @@
 
+
 import { City } from '../../Entities/City';
 import { GameMap, ImprovementType, ResourceType } from '../../Grid/GameMap';
 import { Hex, getHexNeighbors, hexToString, getHexRange } from '../../Grid/HexMath';
@@ -13,6 +14,12 @@ export class CityManager {
     constructor(map: GameMap, transportNetwork: TransportNetwork) {
         this.map = map;
         this.transportNetwork = transportNetwork;
+    }
+
+    public cloneDeep(newMap: GameMap, newNetwork: TransportNetwork): CityManager {
+        const clone = new CityManager(newMap, newNetwork);
+        clone.cities = this.cities.map(c => c.cloneDeep());
+        return clone;
     }
 
     public get capital(): City | null {

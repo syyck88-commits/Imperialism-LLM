@@ -1,4 +1,5 @@
 
+
 import { Hex } from '../Grid/HexMath';
 
 export enum UnitType {
@@ -21,7 +22,7 @@ export class Unit {
   
   // Visual state for animation
   public visualPos: { q: number, r: number };
-  private movementQueue: Hex[] = []; // Queue for smooth path animation
+  public movementQueue: Hex[] = []; // Queue for smooth path animation
   
   public movesLeft: number;
   public maxMoves: number;
@@ -61,6 +62,28 @@ export class Unit {
     }
     
     this.movesLeft = this.maxMoves;
+  }
+
+  /**
+   * Creates a deep copy of the Unit, preserving its class type (prototype).
+   */
+  public cloneDeep(): Unit {
+      // 1. Create a new object with the same prototype as the current instance
+      // This ensures if 'this' is an Engineer, the clone is also an Engineer.
+      const clone = Object.create(Object.getPrototypeOf(this));
+
+      // 2. Copy all enumerable properties (shallow copy)
+      Object.assign(clone, this);
+
+      // 3. Deep copy reference types
+      clone.location = { ...this.location };
+      clone.visualPos = { ...this.visualPos };
+      clone.movementQueue = this.movementQueue.map(h => ({ ...h }));
+      if (this.targetHex) {
+          clone.targetHex = { ...this.targetHex };
+      }
+
+      return clone;
   }
 
   public getEmoji(): string {

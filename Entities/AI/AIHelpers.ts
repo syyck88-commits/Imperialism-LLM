@@ -1,4 +1,5 @@
 
+
 import { GameMap, ResourceType, ImprovementType, TerrainType } from '../../Grid/GameMap';
 import { Hex, getHexDistance, areHexesEqual, hexToString, getHexRange } from '../../Grid/HexMath';
 import { Unit, UnitType } from '../Unit';
@@ -67,9 +68,8 @@ export class AIHelpers {
         let bestHex: Hex | null = null;
         let bestScore = 0;
 
-        const reservedSet = new Set(
-            this.getColleagueTargets(allUnits, unit).map(h => hexToString(h))
-        );
+        // Use new Reservation Logic with radius 2 to prevent Depot clustering
+        const reservedSet = this.getReservedHexes(allUnits, unit, 2);
 
         for (const hex of candidates) {
             if (!map.isValid(hex.q, hex.r)) continue;
@@ -89,7 +89,7 @@ export class AIHelpers {
             // Allow Mountains ONLY if they are empty
             if (tile.terrain === TerrainType.MOUNTAIN && tile.resource !== ResourceType.NONE) continue;
 
-            // Spacing Check
+            // Spacing Check (Existing buildings)
             if (this.isImprovementNearby(map, hex, 2, [ImprovementType.DEPOT, ImprovementType.CITY, ImprovementType.PORT])) continue;
 
             // Score Calculation
@@ -109,7 +109,7 @@ export class AIHelpers {
                 }
             }
 
-            // Heuristic
+            // Heuristic: Maximize Resources, Minimize Distance
             const dist = getHexDistance(unit.location, hex);
             const score = resourceScore * 10 - dist;
 
@@ -138,7 +138,7 @@ export class AIHelpers {
         for (const hex of candidates) {
             if (!map.isValid(hex.q, hex.r)) continue;
             
-            // Cannot build on the resource itself (assuming we call this because the resource is occupied/strategic)
+            // Cannot build on the resource itself
             if (areHexesEqual(hex, resourceHex)) continue;
 
             const tile = map.getTile(hex.q, hex.r);
@@ -175,7 +175,7 @@ export class AIHelpers {
                 }
             }
 
-            // Prefer spots closer to current network if possible, or just arbitrary
+            // Prefer spots closer to current network if possible
             if (score > bestScore) {
                 bestScore = score;
                 bestHex = hex;
@@ -220,6 +220,37 @@ export class AIHelpers {
         return bestHex;
     }
 
+    /**
+     * Retrieves a set of reserved hex strings from all colleagues.
+     * @param radius - If > 0, reserves neighbors of the target as well (Spatial Reservation).
+     */
+    public static getReservedHexes(
+        allUnits: Unit[], 
+        myUnit: Unit, 
+        radius: number = 0
+    ): Set<string> {
+        const reserved = new Set<string>();
+        for (const u of allUnits) {
+            // Filter: Must be a different unit, same type, automated, and have a target
+            if (u.id !== myUnit.id && u.type === myUnit.type && u.isAutomated && u.targetHex) {
+                // Add the specific target
+                reserved.add(hexToString(u.targetHex));
+                
+                // Add spatial buffer if requested
+                if (radius > 0) {
+                    const neighbors = getHexRange(u.targetHex, radius);
+                    for (const n of neighbors) {
+                        reserved.add(hexToString(n));
+                    }
+                }
+            }
+        }
+        return reserved;
+    }
+
+    /**
+     * Legacy wrapper for backward compatibility.
+     */
     public static getColleagueTargets(allUnits: Unit[], myUnit: Unit): Hex[] {
         const targets: Hex[] = [];
         for (const u of allUnits) {

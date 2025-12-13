@@ -1,4 +1,5 @@
 
+
 import { Unit, UnitType } from '../../Entities/Unit';
 import { Engineer, Prospector, ResourceImprover, Developer, CivilianUnit, ProspectFilter, EngineerPriority, EngineerTerrainFilter } from '../../Entities/CivilianUnit';
 import { University } from '../University';
@@ -23,6 +24,13 @@ export class UnitManager {
     constructor(map: GameMap, pathfinder: Pathfinder) {
         this.map = map;
         this.pathfinder = pathfinder;
+    }
+
+    public cloneDeep(newMap: GameMap, newPathfinder: Pathfinder): UnitManager {
+        const clone = new UnitManager(newMap, newPathfinder);
+        clone.units = this.units.map(u => u.cloneDeep());
+        // Selection state is not strictly needed for simulation, but we can copy it or leave null
+        return clone;
     }
 
     public spawnInitialUnits(capitalHex: Hex) {

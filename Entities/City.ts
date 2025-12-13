@@ -1,4 +1,5 @@
 
+
 import { Hex } from '../Grid/HexMath';
 import { ResourceType } from '../Grid/GameMap';
 import { GameConfig } from '../core/GameConfig';
@@ -56,6 +57,26 @@ export class City {
 
     this.initInventory();
     this.initBuildings();
+  }
+
+  public cloneDeep(): City {
+      // Use constructor to create base, then override properties
+      const clone = new City(this.id, this.name, { ...this.location }, this.ownerId);
+      
+      // Copy primitive and object properties
+      clone.population = this.population;
+      clone.workforce = { ...this.workforce };
+      clone.cash = this.cash;
+      clone.transportCapacity = this.transportCapacity;
+      
+      // Deep copy Maps
+      clone.inventory = new Map(this.inventory);
+      clone.productionQueue = [...this.productionQueue];
+      clone.productionTargets = new Map(this.productionTargets);
+      clone.buildingLevels = new Map(this.buildingLevels);
+      clone.lastTransportSettings = new Map(this.lastTransportSettings);
+      
+      return clone;
   }
 
   private initInventory() {
