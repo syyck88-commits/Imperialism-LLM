@@ -1,5 +1,5 @@
 
-import { TerrainType, ResourceType } from '../Grid/GameMap';
+import { ResourceType } from '../Grid/GameMap';
 import { UnitType } from '../Entities/Unit';
 import { ISO_FACTOR } from './RenderUtils';
 import { 
@@ -12,6 +12,8 @@ import {
 } from './assets/AssetGenerators';
 import { SpriteVisualConfig, DEFAULT_SPRITE_CONFIG, PRESET_CONFIGS } from './assets/SpriteVisuals';
 import { unzip } from 'fflate';
+import { TextureManager } from './core/TextureManager';
+import { GPUResourceRegistry } from './core/GPUResourceRegistry';
 
 export class AssetManager {
   private readonly ATLAS_COLS = 3;
@@ -31,7 +33,7 @@ export class AssetManager {
   private static globalLoadPromise: Promise<void> | null = null;
 
   // Specific Sprites Storage
-  private loadedSprites: Map<TerrainType, HTMLImageElement> = new Map();
+  private loadedSprites: Map<number, HTMLImageElement> = new Map();
   public baseSprites: Map<string, HTMLImageElement> = new Map();
   public forestSprites: HTMLImageElement[] = [];
   public resourceSprites: Map<ResourceType, HTMLImageElement> = new Map();
@@ -43,15 +45,22 @@ export class AssetManager {
   // Visual Configuration Registry
   private spriteConfigs: Map<string, SpriteVisualConfig> = new Map();
 
-  public spriteMap: Record<TerrainType, { col: number, row: number }> = {
-      [TerrainType.WATER]:    { col: 0, row: 0 },
-      [TerrainType.PLAINS]:   { col: 1, row: 0 },
-      [TerrainType.FOREST]:   { col: 2, row: 0 },
-      [TerrainType.HILLS]:    { col: 0, row: 1 },
-      [TerrainType.MOUNTAIN]: { col: 1, row: 1 },
-      [TerrainType.DESERT]:   { col: 2, row: 1 },
-      [TerrainType.SWAMP]:    { col: 0, row: 0 }, 
-      [TerrainType.TUNDRA]:   { col: 2, row: 1 }, 
+  // WebGL Asset Pipeline
+  public textureManager: TextureManager;
+  private mainAtlases: any[] = [];
+  private spriteAtlasUVs: Map<string, any> = new Map();
+  private gl: WebGLRenderingContext | WebGL2RenderingContext | null = null;
+  private registry = GPUResourceRegistry.getInstance();
+
+  public spriteMap: Record<number, { col: number, row: number }> = {
+      [0]:    { col: 0, row: 0 }, // WATER
+      [1]:   { col: 1, row: 0 },  // PLAINS
+      [2]:   { col: 2, row: 0 },  // FOREST
+      [3]:    { col: 0, row: 1 }, // HILLS
+      [4]: { col: 1, row: 1 },    // MOUNTAIN
+      [5]:   { col: 2, row: 1 },  // DESERT
+      [6]:    { col: 0, row: 0 }, // SWAMP
+      [7]:   { col: 2, row: 1 },  // TUNDRA
   };
 
   public uiMap = {
@@ -66,6 +75,7 @@ export class AssetManager {
   public readonly uiTileH: number;
 
   constructor() {
+    this.textureManager = new TextureManager();
     this.terrainTiles = document.createElement('canvas');
     this.uiSprites = document.createElement('canvas');
     
@@ -81,6 +91,25 @@ export class AssetManager {
     
     this.loadAssets();
     this.loadConfigs();
+  }
+
+  public initGL(gl: WebGLRenderingContext | WebGL2RenderingContext) {
+      this.gl = gl;
+      this.textureManager.init(gl);
+      // Re-setup elements if they were loaded before GL was ready
+      // Or if context was restored (isAtlasLoaded might be false or texture handles invalid)
+      if (this.loadedSprites.size > 0) {
+          this.setupWebGLElements();
+      }
+  }
+
+  public onContextLost() {
+      console.warn("AssetManager: Context Lost. Dropping GPU references.");
+      this.gl = null;
+      this.isAtlasLoaded = false;
+      this.mainAtlases = [];
+      this.spriteAtlasUVs.clear();
+      this.registry.onContextLost();
   }
 
   private loadConfigs() {
@@ -150,6 +179,19 @@ export class AssetManager {
       }
 
       return img ? img.src : null;
+  }
+
+  public getSpriteUV(key: string): any | null {
+      return this.spriteAtlasUVs.get(key) || null;
+  }
+
+  public getMainAtlas(): any | null {
+      // Backwards compatibility: return the first atlas
+      return this.mainAtlases.length > 0 ? this.mainAtlases[0] : null;
+  }
+
+  public getMainAtlasById(id: number): any | null {
+      return this.mainAtlases[id] || null;
   }
 
   // --- PAK Loading Logic ---
@@ -277,16 +319,16 @@ export class AssetManager {
 
       // 2. Load Specific Sprites (Terrain)
       const terrainFiles: Record<number, string> = {
-          [TerrainType.WATER]: 'water',
-          [TerrainType.PLAINS]: 'plane',
-          [TerrainType.FOREST]: 'forest',
-          [TerrainType.HILLS]: 'hills',
-          [TerrainType.MOUNTAIN]: 'rock',
-          [TerrainType.DESERT]: 'sand',
+          [0]: 'water',
+          [1]: 'plane',
+          [2]: 'forest',
+          [3]: 'hills',
+          [4]: 'rock',
+          [5]: 'sand',
       };
 
       const terrainPromises = Object.entries(terrainFiles).map(async ([typeVal, name]) => {
-          const type = Number(typeVal) as TerrainType;
+          const type = Number(typeVal);
           const img = await this.fetchImage(`${name}.png`);
           if (img) this.loadedSprites.set(type, img);
       });
@@ -355,10 +397,46 @@ export class AssetManager {
           ...basePromises, ...forestPromises, ...terrainPromises, 
           ...unitPromises, ...structurePromises, ...resPromises
       ]);
+
+      // Post-load: Prepare WebGL Resources
+      // Only invoke setup if context is available. 
+      // If loaded before GL init, initGL() will handle it.
+      if (this.gl) {
+          this.setupWebGLElements();
+      }
+  }
+
+  /**
+   * Prepares assets for WebGL rendering by creating a texture atlas and mapping UVs.
+   */
+  private setupWebGLElements() {
+      if (!this.gl) return; // Defensive check
+
+      const allAssets = new Map<string, HTMLImageElement | HTMLCanvasElement>();
+
+      // 1. Collect all assets with unified keys
+      this.baseSprites.forEach((img, key) => allAssets.set(`BASE_${key}`, img));
+      this.loadedSprites.forEach((img, key) => allAssets.set(`TERRAIN_${key}`, img));
+      this.forestSprites.forEach((img, idx) => allAssets.set(`FOREST_${idx + 1}`, img));
+      this.unitSprites.forEach((img, key) => allAssets.set(`UNIT_${key}`, img));
+      this.structureSprites.forEach((img, key) => allAssets.set(`STR_${key}`, img));
+      this.resourceSprites.forEach((img, key) => allAssets.set(`RES_${key}`, img));
+
+      // 2. Create Atlas (Multi-Atlas Support)
+      const result = this.textureManager.createTextureAtlas(allAssets);
+
+      if (result) {
+          this.mainAtlases = result.handles;
+          this.spriteAtlasUVs = result.rects;
+          this.isAtlasLoaded = true;
+          console.log(`AssetManager: Created ${this.mainAtlases.length} texture atlas(es).`);
+      } else {
+          console.error("AssetManager: Failed to create texture atlas.");
+      }
   }
 
   // Method B: User Uploads
-  public async uploadSprite(type: TerrainType, file: File): Promise<void> {
+  public async uploadSprite(type: number, file: File): Promise<void> {
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = async (e) => {
@@ -368,6 +446,10 @@ export class AssetManager {
                   try {
                       await img.decode();
                       this.loadedSprites.set(type, img);
+                      // Update WebGL assets dynamically
+                      if (this.gl) {
+                          this.setupWebGLElements();
+                      }
                       resolve();
                   } catch (err) {
                       reject(err);
@@ -378,7 +460,7 @@ export class AssetManager {
       });
   }
 
-  public getSprite(type: TerrainType): HTMLImageElement | null {
+  public getSprite(type: number): HTMLImageElement | null {
       return this.loadedSprites.get(type) || null;
   }
 
@@ -421,7 +503,7 @@ export class AssetManager {
       return { w: this.terrainTiles.width, h: this.terrainTiles.height };
   }
 
-  public getSpriteCoords(type: TerrainType) {
+  public getSpriteCoords(type: number) {
       return this.spriteMap[type];
   }
 }

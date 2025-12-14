@@ -1,20 +1,23 @@
 
 import React, { useState } from 'react';
-import { X, Mountain, Image as ImageIcon, Settings } from 'lucide-react';
+import { X, Mountain, Image as ImageIcon, Settings, Monitor } from 'lucide-react';
 import { SpriteVisualConfig } from '../../Renderer/assets/SpriteVisuals';
 import { BiomeTab } from './AssetModal/BiomeTab';
 import { SpriteTab } from './AssetModal/SpriteTab';
+import { QualityTab } from './AssetModal/QualityTab';
+import { TerrainType } from '../../Grid/GameMap';
 
 interface AssetModalProps {
     onClose: () => void;
-    onUpload?: any; 
+    onUpload?: (type: TerrainType, file: File) => Promise<void>; 
+    onRegenerate?: () => Promise<void>;
     getConfig?: (key: string) => SpriteVisualConfig;
     setConfig?: (key: string, cfg: SpriteVisualConfig) => void;
     getSpriteSource?: (key: string) => string | null;
 }
 
-const AssetModal: React.FC<AssetModalProps> = ({ onClose, getConfig, setConfig, getSpriteSource }) => {
-    const [activeTab, setActiveTab] = useState<'BIOME' | 'SPRITES'>('BIOME');
+const AssetModal: React.FC<AssetModalProps> = ({ onClose, getConfig, setConfig, getSpriteSource, onRegenerate }) => {
+    const [activeTab, setActiveTab] = useState<'QUALITY' | 'BIOME' | 'SPRITES'>('QUALITY');
 
     return (
         <div className="fixed right-4 top-24 bottom-4 w-96 flex flex-col z-50 font-sans pointer-events-none">
@@ -31,6 +34,12 @@ const AssetModal: React.FC<AssetModalProps> = ({ onClose, getConfig, setConfig, 
 
                 {/* MAIN TABS */}
                 <div className="flex border-b border-slate-700 shrink-0">
+                     <button 
+                        onClick={() => setActiveTab('QUALITY')}
+                        className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'QUALITY' ? 'text-white border-b-2 border-blue-500 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800'}`}
+                    >
+                        <Monitor size={16} /> Графика
+                    </button>
                     <button 
                         onClick={() => setActiveTab('BIOME')}
                         className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'BIOME' ? 'text-white border-b-2 border-amber-500 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800'}`}
@@ -39,16 +48,20 @@ const AssetModal: React.FC<AssetModalProps> = ({ onClose, getConfig, setConfig, 
                     </button>
                     <button 
                         onClick={() => setActiveTab('SPRITES')}
-                        className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'SPRITES' ? 'text-white border-b-2 border-blue-500 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800'}`}
+                        className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'SPRITES' ? 'text-white border-b-2 border-purple-500 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800'}`}
                     >
                         <ImageIcon size={16} /> Спрайты
                     </button>
                 </div>
 
                 <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
-                    {activeTab === 'BIOME' ? (
-                        <BiomeTab />
-                    ) : (
+                    {activeTab === 'QUALITY' && (
+                        <QualityTab />
+                    )}
+                    {activeTab === 'BIOME' && (
+                        <BiomeTab onRegenerate={onRegenerate} />
+                    )}
+                    {activeTab === 'SPRITES' && (
                         <SpriteTab 
                             getConfig={getConfig}
                             setConfig={setConfig}

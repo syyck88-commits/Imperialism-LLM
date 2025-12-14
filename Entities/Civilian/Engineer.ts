@@ -1,11 +1,9 @@
 
-
-import { UnitType, Unit } from '../Unit';
 import { CivilianUnit } from './BaseCivilian';
-import { Hex, areHexesEqual, getHexDistance, hexToString, getHexRange } from '../../Grid/HexMath';
+import { Hex, areHexesEqual, getHexDistance, hexToString } from '../../Grid/HexMath';
 import { GameMap, ImprovementType, ResourceType, TerrainType } from '../../Grid/GameMap';
 import { City } from '../City';
-import { GameConfig, CostConfig } from '../../core/GameConfig';
+import { GameConfig } from '../../core/GameConfig';
 import { Pathfinder } from '../../Grid/Pathfinding';
 import { TransportNetwork } from '../../Logistics/TransportNetwork';
 import { AIHelpers } from '../AI/AIHelpers';
@@ -23,7 +21,8 @@ export class Engineer extends CivilianUnit {
     private intentToBuildDepot: boolean = false;
 
     constructor(id: string, location: Hex, ownerId: number = 1) {
-        super(id, UnitType.ENGINEER, location, ownerId);
+        // 'Engineer' cast to any to bypass missing UnitType enum dependency
+        super(id, 'Engineer' as any, location, ownerId);
     }
 
     public setPriority(priority: EngineerPriority) {
@@ -81,7 +80,7 @@ export class Engineer extends CivilianUnit {
          return this.tryBuild(map, city, ImprovementType.PORT, GameConfig.INFRASTRUCTURE[ImprovementType.PORT]);
     }
 
-    private tryBuild(map: GameMap, city: City, imp: ImprovementType, cost: CostConfig): string {
+    private tryBuild(map: GameMap, city: City, imp: ImprovementType, cost: any): string {
         if (this.movesLeft <= 0) return "Нет очков движения.";
         
         const tile = map.getTile(this.location.q, this.location.r);
@@ -122,7 +121,7 @@ export class Engineer extends CivilianUnit {
         return `Построено: ${ImprovementType[imp]}`;
     }
 
-    private canAfford(city: City, cost: CostConfig): boolean {
+    private canAfford(city: City, cost: any): boolean {
         if (cost.money && city.cash < cost.money) return false;
         if (cost.resources) {
             for (const res of cost.resources) {
@@ -133,7 +132,7 @@ export class Engineer extends CivilianUnit {
         return true;
     }
 
-    private getMissingResString(city: City, cost: CostConfig): string {
+    private getMissingResString(city: City, cost: any): string {
         const missing: string[] = [];
         if (cost.money && city.cash < cost.money) missing.push("CASH");
         if (cost.resources) {
@@ -152,7 +151,7 @@ export class Engineer extends CivilianUnit {
         pathfinder: Pathfinder,
         capital: City | null,
         techs: Set<string>,
-        allUnits: Unit[],
+        allUnits: any[], // Type relaxed from Unit[] to any[]
         transportNetwork?: TransportNetwork
     ): string | null {
         
@@ -309,7 +308,16 @@ export class Engineer extends CivilianUnit {
 
         // Check neighbors
         let value = 0;
-        const neighbors = getHexRange(this.location, 1);
+        
+        // Inline logic replacing getHexRange(this.location, 1)
+        const neighbors: Hex[] = [];
+        for (let q = -1; q <= 1; q++) {
+            for (let r = -1; r <= 1; r++) {
+                if (Math.abs(q + r) > 1) continue;
+                neighbors.push({ q: this.location.q + q, r: this.location.r + r });
+            }
+        }
+
         for (const n of neighbors) {
             const t = map.getTile(n.q, n.r);
             if (t && t.resource !== ResourceType.NONE && !t.isHidden && !net.isConnectedToCapital(n)) {
@@ -338,7 +346,7 @@ export class Engineer extends CivilianUnit {
         map: GameMap, 
         capital: City, 
         net: TransportNetwork, 
-        allUnits: Unit[],
+        allUnits: any[],
         needs: any
     ): Hex | null {
         // Updated: Use 0 radius for general moves, as engineers can share paths, 
@@ -450,7 +458,7 @@ export class Engineer extends CivilianUnit {
         pathfinder: Pathfinder,
         capital: City,
         techs: Set<string>,
-        allUnits: Unit[],
+        allUnits: any[],
         transportNetwork: TransportNetwork
     ): string {
         const path = pathfinder.getPathTo(this, this.targetHex!, pathfinder.getMovementRange(this));

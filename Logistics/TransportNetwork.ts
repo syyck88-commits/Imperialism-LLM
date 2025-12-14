@@ -1,7 +1,6 @@
 
-
-import { GameMap, TerrainType, ImprovementType } from '../Grid/GameMap';
-import { Hex, getHexNeighbors, areHexesEqual, offsetToAxial, axialToOffset } from '../Grid/HexMath';
+import { GameMap, ImprovementType } from '../Grid/GameMap';
+import { Hex, getHexNeighbors } from '../Grid/HexMath';
 
 interface PathNode {
   hex: Hex;

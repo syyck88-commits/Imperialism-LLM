@@ -4,7 +4,7 @@ import { City } from '../Entities/City';
 import { Unit } from '../Entities/Unit';
 import { getHexDistance } from '../Grid/HexMath';
 import { TransportNetwork } from '../Logistics/TransportNetwork';
-import { getImprovementName, getResourceName } from '../utils/Localization';
+import { getResourceName } from '../utils/Localization';
 import { GameConfig } from './GameConfig';
 
 export const analyzeGameState = (

@@ -1,10 +1,8 @@
 
-
 import { GameMap, ResourceType, ImprovementType, TerrainType } from '../../Grid/GameMap';
 import { Hex, getHexDistance, areHexesEqual, hexToString, getHexRange } from '../../Grid/HexMath';
-import { Unit, UnitType } from '../Unit';
+import { Unit } from '../Unit';
 import { TransportNetwork } from '../../Logistics/TransportNetwork';
-import { City } from '../City';
 
 export interface ResourceWeight {
     [key: number]: number; // ResourceType -> Score

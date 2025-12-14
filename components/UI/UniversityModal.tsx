@@ -5,8 +5,6 @@ import { City } from '../../Entities/City';
 import { UnitType } from '../../Entities/Unit';
 import { ResourceType } from '../../Grid/GameMap';
 import { University } from '../../core/University';
-import { GameConfig } from '../../core/GameConfig';
-import { formatCost } from '../../utils/Localization';
 
 interface UniversityModalProps {
     capital: City | null;
@@ -89,7 +87,7 @@ const UniversityModal: React.FC<UniversityModalProps> = ({ capital, onClose, onR
                                     <button 
                                         onClick={() => onRecruit(u.type)}
                                         disabled={(capital?.expertLabor || 0) < 1}
-                                        title={`Стоимость: ${formatCost(GameConfig.UNITS.CONSTRUCTION.COST)}`}
+                                        title={`Стоимость: ${University.getUnitCost()}`}
                                         className="bg-[#8b5a2b] text-white px-4 py-2 rounded hover:bg-[#6b4521] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs font-bold uppercase"
                                     >
                                         Обучить

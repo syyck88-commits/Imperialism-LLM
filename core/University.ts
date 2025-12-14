@@ -1,9 +1,8 @@
 
 import { Unit, UnitType } from '../Entities/Unit';
-import { CivilianUnit, Engineer, Prospector, ResourceImprover, Developer } from '../Entities/CivilianUnit';
+import { Engineer, Prospector, ResourceImprover, Developer } from '../Entities/CivilianUnit';
 import { City } from '../Entities/City';
 import { Hex } from '../Grid/HexMath';
-import { ResourceType } from '../Grid/GameMap';
 import { GameConfig } from './GameConfig';
 
 interface CreationResult {
@@ -29,7 +28,7 @@ export class University {
         type: UnitType, 
         city: City, 
         spawnHex: Hex, 
-        techs: Set<string>,
+        techs: Set<string>, 
         nextId: string
     ): CreationResult {
         

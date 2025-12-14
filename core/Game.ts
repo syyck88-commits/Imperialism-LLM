@@ -1,6 +1,5 @@
 
 import { GameLoop } from './GameLoop';
-import { World } from './ECS';
 import { GameMap, ImprovementType, TerrainType, TileData, ResourceType } from '../Grid/GameMap';
 import { MapRenderer } from '../Renderer/MapRenderer';
 import { CameraInput } from '../Input/CameraInput';
@@ -17,14 +16,27 @@ import { UnitManager } from './managers/UnitManager';
 import { ActionSystem } from './systems/ActionSystem';
 import { SimulationSystem } from './systems/SimulationSystem';
 
-import { HoverInfo, GameStateCallback } from './Types';
-export { HoverInfo, GameStateCallback };
+import { WebGLContext } from '../Renderer/core/WebGLContext';
+import { GPUResourceRegistry } from '../Renderer/core/GPUResourceRegistry';
+// Fix: Import `ChunkLayer` to resolve 'Cannot find name' error.
+import { ChunkLayer } from '../Renderer/chunks/ChunkTypes';
+
+import { QualityManager } from './quality/QualityManager';
+
+export interface HoverInfo {
+  hex: Hex;
+  tileData: TileData | null;
+  yields: Map<ResourceType, number> | null;
+  isConnected: boolean;
+}
 
 export class Game {
   private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
+  private overlayCanvas: HTMLCanvasElement | null;
+  private overlayCtx: CanvasRenderingContext2D | null = null;
+  
+  private drawingContext: WebGLContext;
   private loop: GameLoop;
-  public world: World; 
   
   public map: GameMap;
   public mapRenderer: MapRenderer;
@@ -63,30 +75,62 @@ export class Game {
   public hoveredHex: Hex | null = null;
   private lastHoveredHex: Hex | null = null;
   
-  private stateCallback?: GameStateCallback;
+  private stateCallback?: any;
 
   // Loading State
   private loadingCallback?: (pct: number, msg: string) => void;
   public isReady: boolean = false;
+  
+  // Context Management
+  private isContextLost: boolean = false;
 
-  constructor(canvas: HTMLCanvasElement, callback?: GameStateCallback) {
+  // Quality Manager
+  private qualityManager: QualityManager;
+
+  constructor(canvas: HTMLCanvasElement, overlayCanvas: HTMLCanvasElement | null, callback?: any) {
     this.canvas = canvas;
+    this.overlayCanvas = overlayCanvas;
+    
+    if (this.overlayCanvas) {
+        this.overlayCtx = this.overlayCanvas.getContext('2d');
+    }
+
+    this.qualityManager = QualityManager.getInstance();
+    this.windStrength = this.qualityManager.getSettings().enableWindAnimation ? 0.5 : 0;
+    this.qualityManager.addListener(settings => {
+        this.windStrength = settings.enableWindAnimation ? 0.5 : 0;
+    });
+
     this.stateCallback = callback;
     this.loadingCallback = callback?.onLoading;
 
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error("Could not get 2D context");
-    this.ctx = context;
+    // Initialize Abstraction Layer for Rendering - WebGL Only
+    try {
+        this.drawingContext = new WebGLContext(canvas);
+        console.log("Game running in WebGL mode");
+    } catch (e) {
+        console.error("WebGL Initialization failed. This application requires WebGL.", e);
+        // In a real app, you'd show a user-friendly error message here.
+        alert("Ошибка: WebGL не поддерживается или отключен. Игра не может быть запущена.");
+        throw new Error("WebGL context creation failed.");
+    }
+
+    // Attach Context Events
+    this.canvas.addEventListener('webglcontextlost', this.handleContextLost.bind(this), false);
+    this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored.bind(this), false);
 
     this.camera.width = canvas.width;
     this.camera.height = canvas.height;
 
-    this.world = new World();
     this.map = new GameMap(100, 100);
     this.transportNetwork = new TransportNetwork(this.map); 
     
     // Set hexSize to match 128px width: width = size * sqrt(3) => size = 128 / sqrt(3)
     this.mapRenderer = new MapRenderer(this.map, 128 / Math.sqrt(3));
+    if (this.overlayCtx) {
+        this.mapRenderer.setOverlayContext(this.overlayCtx);
+    }
+
     this.pathfinder = new Pathfinder(this.map);
     
     this.cityManager = new CityManager(this.map, this.transportNetwork);
@@ -95,10 +139,33 @@ export class Game {
     // Initialize Systems
     this.actions = new ActionSystem(this);
 
+    // Input listeners
     this.input = new CameraInput(this, this.canvas);
     this.loop = new GameLoop(this.update.bind(this), this.render.bind(this));
 
     this.init();
+  }
+
+  // --- Context Handling ---
+
+  private handleContextLost(e: Event) {
+      e.preventDefault(); // Required to allow restoration
+      console.warn("Game: WebGL Context Lost!");
+      this.isContextLost = true;
+      this.mapRenderer.onContextLost();
+  }
+
+  private handleContextRestored(e: Event) {
+      console.log("Game: WebGL Context Restored!");
+      this.isContextLost = false;
+      
+      const newCtx = this.canvas.getContext('webgl2') || this.canvas.getContext('webgl');
+      if (newCtx) {
+          // Re-initialize systems with new context
+          this.mapRenderer.setContext(newCtx as WebGLRenderingContext | WebGL2RenderingContext);
+          this.mapRenderer.chunkManager.invalidateAll(ChunkLayer.BASE);
+          this.mapRenderer.chunkManager.invalidateAll(ChunkLayer.INFRA);
+      }
   }
 
   // --- Clone and Simulation Logic ---
@@ -120,6 +187,13 @@ export class Game {
   private async init() {
     this.reportLoading(0, "Анализ карты...");
     
+    // Ensure WebGL context is passed to MapRenderer/AssetManager before heavy loading starts.
+    // This fixes the race condition where assets load and try to create atlas before context is ready.
+    const nativeCtx = this.drawingContext.getNativeContext();
+    if (nativeCtx instanceof WebGLRenderingContext || nativeCtx instanceof WebGL2RenderingContext) {
+        this.mapRenderer.setContext(nativeCtx);
+    }
+
     this.transportNetwork.findAndSetCapital();
     this.spawnInitialEntities();
 
@@ -171,6 +245,11 @@ export class Game {
   public resize(width: number, height: number) {
     this.camera.width = width;
     this.camera.height = height;
+    this.drawingContext.resize(width, height);
+    if (this.overlayCanvas) {
+        this.overlayCanvas.width = width;
+        this.overlayCanvas.height = height;
+    }
   }
 
   private getHexPixelPos(hex: Hex): {x: number, y: number} {
@@ -208,6 +287,10 @@ export class Game {
   public get units(): Unit[] { return this.unitManager.units; }
   public get selectedUnit(): Unit | null { return this.unitManager.selectedUnit; }
   public get selectedHex(): Hex | null { return this.unitManager.selectedHex; }
+
+  public getVRAMStats(): string {
+      return GPUResourceRegistry.getInstance().toDebugString();
+  }
 
   // Action Proxies (Delegated to ActionSystem)
   public recruitUnit(type: UnitType): string {
@@ -373,9 +456,12 @@ export class Game {
   public destroy() {
       this.stop();
       this.input.dispose();
+      this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
+      this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
   }
 
   private update(deltaTime: number) {
+    if (this.isContextLost) return;
     if (!this.isReady) return;
 
     // Accumulate time for animation
@@ -439,9 +525,13 @@ export class Game {
     
     // Update display every 500ms
     if (this.fpsTimeAccumulator >= 500) {
-        const fps = Math.round((this.frameCount * 1000) / this.fpsTimeAccumulator);
+        const fps = (this.frameCount * 1000) / this.fpsTimeAccumulator;
+        
+        // Feed to QualityManager for auto-adaptation
+        this.qualityManager.onFrame(deltaTime, fps);
+
         const fpsEl = document.getElementById('debug-fps');
-        if (fpsEl) fpsEl.innerText = fps.toString();
+        if (fpsEl) fpsEl.innerText = Math.round(fps).toString();
         
         const entEl = document.getElementById('debug-entities');
         if (entEl) entEl.innerText = (this.cities.length + this.units.length).toString();
@@ -452,17 +542,37 @@ export class Game {
   }
 
   private render() {
-    this.ctx.fillStyle = '#0f172a';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Handle Context Lost State
+    if (this.isContextLost) {
+        if (this.overlayCtx && this.overlayCanvas) {
+            this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+            this.overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            this.overlayCtx.fillRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+            this.overlayCtx.font = '24px sans-serif';
+            this.overlayCtx.fillStyle = 'white';
+            this.overlayCtx.textAlign = 'center';
+            this.overlayCtx.fillText("GPU context lost, restoring...", this.overlayCanvas.width/2, this.overlayCanvas.height/2);
+        }
+        return;
+    }
+
+    // Clear screen using abstraction layer
+    this.drawingContext.clear('#0f172a');
+    
+    // Clear overlay if exists
+    if (this.overlayCtx && this.overlayCanvas) {
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+    }
 
     if (!this.isReady) return;
 
+    // Pass the raw context (Canvas2D or WebGL) to the map renderer
     this.mapRenderer.render(
-        this.ctx, 
+        this.drawingContext.getNativeContext(), 
         this.camera, 
         this.cities, 
         this.units, 
-        this.selectedUnit,
+        this.selectedUnit, 
         this.unitManager.validMovesCache,
         this.unitManager.currentPathCache,
         this.previewHighlightHex,
@@ -472,7 +582,9 @@ export class Game {
     );
 
     if (this.hoveredHex) {
-        this.mapRenderer.drawHighlight(this.ctx, this.camera, this.hoveredHex);
+        // Pass context here too if MapRenderer exposes drawHighlight separately
+        // The OverlayDrawer inside will handle choosing correct context
+        this.mapRenderer.drawHighlight(this.drawingContext.getNativeContext(), this.camera, this.hoveredHex);
     }
   }
 }

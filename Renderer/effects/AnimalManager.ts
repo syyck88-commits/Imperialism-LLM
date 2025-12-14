@@ -2,6 +2,7 @@
 import { Hex, hexToString } from '../../Grid/HexMath';
 import { ResourceType } from '../../Grid/GameMap';
 import { AssetManager } from '../AssetManager';
+import { QualityManager } from '../../core/quality/QualityManager';
 
 export interface AnimalInstance {
     x: number; // relative to tile center (base coordinates)
@@ -26,14 +27,46 @@ export class AnimalManager {
     // Bounds for movement relative to center (in base pixels)
     private readonly BOUNDS_RADIUS = 25;
 
+    // Performance Throttling
+    private updateInterval: number = 1000 / 60;
+    private accumulator: number = 0;
+
+    constructor() {
+        const qualityManager = QualityManager.getInstance();
+        const settings = qualityManager.getSettings();
+        this.updateInterval = 1000 / settings.animalsUpdateHz;
+        
+        qualityManager.addListener((newSettings) => {
+            if(newSettings.animalsUpdateHz > 0) {
+                this.updateInterval = 1000 / newSettings.animalsUpdateHz;
+            } else {
+                this.updateInterval = Infinity; // Effectively disable updates
+            }
+        });
+    }
+
     public update(deltaTime: number) {
+        if (!isFinite(this.updateInterval)) return;
+
+        this.accumulator += deltaTime;
+        if (this.accumulator < this.updateInterval) {
+            return;
+        }
+
+        const updateDelta = this.accumulator;
+        this.accumulator = 0;
+
         this.animals.forEach(group => {
             group.forEach(animal => {
-                this.updateAnimal(animal, deltaTime);
+                this.updateAnimal(animal, updateDelta);
             });
             // Sort by Y for depth within the tile
             group.sort((a, b) => a.y - b.y);
         });
+    }
+
+    public getAnimals(key: string): AnimalInstance[] | undefined {
+        return this.animals.get(key);
     }
 
     private updateAnimal(animal: AnimalInstance, dt: number) {

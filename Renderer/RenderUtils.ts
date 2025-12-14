@@ -1,6 +1,4 @@
 
-import { Hex } from '../Grid/HexMath';
-
 export interface Camera {
   x: number;
   y: number;

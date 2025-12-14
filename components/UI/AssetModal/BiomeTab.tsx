@@ -54,16 +54,11 @@ const DEFAULT_HILLS: BiomeConfig = {
     SNOW_LEVEL: 1.1
 };
 
-const hexToRgb = (hex: string): [number, number, number] => {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? [
-    parseInt(result[1], 16),
-    parseInt(result[2], 16),
-    parseInt(result[3], 16)
-  ] : [0,0,0];
-};
+interface BiomeTabProps {
+    onRegenerate?: () => Promise<void>;
+}
 
-export const BiomeTab: React.FC = () => {
+export const BiomeTab: React.FC<BiomeTabProps> = ({ onRegenerate }) => {
     const [biomeType, setBiomeType] = useState<'DESERT' | 'MOUNTAIN' | 'HILLS'>('DESERT');
     const [config, setBiomeConfig] = useState<BiomeConfig>({ ...DESERT_CONFIG });
     const previewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -100,15 +95,18 @@ export const BiomeTab: React.FC = () => {
         return () => clearTimeout(timer);
     }, [config]);
 
-    const applyBiomeToWorld = () => {
+    const applyBiomeToWorld = async () => {
+        if (!onRegenerate) return;
+        
         setIsGenerating(true);
         if (biomeType === 'DESERT') Object.assign(DESERT_CONFIG, config);
         else if (biomeType === 'MOUNTAIN') Object.assign(MOUNTAIN_CONFIG, config);
         else Object.assign(HILLS_CONFIG, config);
         
         localStorage.setItem(`TERRAIN_CONFIG_${biomeType}`, JSON.stringify(config));
-        window.dispatchEvent(new CustomEvent('CMD_REGEN_DESERTS'));
-        setTimeout(() => setIsGenerating(false), 1500);
+        
+        await onRegenerate();
+        setIsGenerating(false);
     };
 
     const resetBiomeToDefaults = () => {
@@ -224,7 +222,7 @@ export const BiomeTab: React.FC = () => {
                  <button onClick={exportSettings} className="bg-slate-700 hover:bg-slate-600 text-white px-4 rounded font-bold transition-colors">
                     <Download size={18} />
                 </button>
-                <button onClick={applyBiomeToWorld} disabled={isGenerating} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded font-bold transition-colors flex items-center justify-center gap-2">
+                <button onClick={applyBiomeToWorld} disabled={isGenerating || !onRegenerate} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded font-bold transition-colors flex items-center justify-center gap-2">
                     <RefreshCw size={18} className={isGenerating ? "animate-spin" : ""} />
                     {isGenerating ? "Применение..." : `Применить (${getBiomeLabel()})`}
                 </button>

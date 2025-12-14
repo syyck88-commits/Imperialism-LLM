@@ -1,4 +1,6 @@
 
+
+
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
 import { Game, HoverInfo } from '../core/Game';
 import { Unit, UnitType } from '../Entities/Unit';
@@ -9,6 +11,7 @@ import { ProspectFilter } from '../Entities/CivilianUnit';
 import { Engineer } from '../Entities/Civilian/Engineer';
 import { Loader2 } from 'lucide-react';
 import { SpriteVisualConfig, DEFAULT_SPRITE_CONFIG } from '../Renderer/assets/SpriteVisuals';
+import { QualityManager } from '../core/quality/QualityManager';
 
 export interface GameRef {
   resolveTurn: (allocations: Map<ResourceType, number>) => void;
@@ -31,6 +34,7 @@ export interface GameRef {
   uploadSprite: (type: TerrainType, file: File) => Promise<void>;
   regenerateDeserts: () => Promise<void>;
   setWindStrength: (val: number) => void;
+  getVRAMStats: () => string;
   // Sprite Configs
   getSpriteConfig: (key: string) => SpriteVisualConfig;
   setSpriteConfig: (key: string, config: SpriteVisualConfig) => void;
@@ -47,7 +51,9 @@ interface GameContainerProps {
 const GameContainer = forwardRef<GameRef, GameContainerProps>(({ onTurnChange, onSelectionChange, onHoverChange, onCapitalUpdate }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
+  const qualityManager = QualityManager.getInstance();
 
   // Loading State
   const [loading, setLoading] = useState<{active: boolean, progress: number, msg: string}>({
@@ -168,6 +174,9 @@ const GameContainer = forwardRef<GameRef, GameContainerProps>(({ onTurnChange, o
             gameRef.current.setWindStrength(val);
         }
     },
+    getVRAMStats: () => {
+        return gameRef.current?.getVRAMStats() || '';
+    },
     getSpriteConfig: (key: string) => {
         if (gameRef.current) return gameRef.current.mapRenderer.assets.getConfig(key);
         return DEFAULT_SPRITE_CONFIG;
@@ -185,12 +194,32 @@ const GameContainer = forwardRef<GameRef, GameContainerProps>(({ onTurnChange, o
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
 
-    // Set initial size
-    canvasRef.current.width = containerRef.current.clientWidth;
-    canvasRef.current.height = containerRef.current.clientHeight;
+    // Handle Window Resize and QualityManager changes (like renderScale)
+    const handleResize = () => {
+      if (containerRef.current && canvasRef.current && gameRef.current) {
+        const settings = qualityManager.getSettings();
+        const scale = settings.renderScale;
+        const dpr = window.devicePixelRatio || 1;
+
+        const { clientWidth, clientHeight } = containerRef.current;
+        
+        const newWidth = Math.round(clientWidth * dpr * scale);
+        const newHeight = Math.round(clientHeight * dpr * scale);
+        
+        if (canvasRef.current.width !== newWidth || canvasRef.current.height !== newHeight) {
+            canvasRef.current.width = newWidth;
+            canvasRef.current.height = newHeight;
+            if (overlayRef.current) {
+                overlayRef.current.width = newWidth;
+                overlayRef.current.height = newHeight;
+            }
+            gameRef.current.resize(newWidth, newHeight);
+        }
+      }
+    };
 
     // Instantiate the Game Engine
-    const game = new Game(canvasRef.current, {
+    const game = new Game(canvasRef.current, overlayRef.current, {
       onTurnChange: (t, y) => onTurnChange(t, y),
       onSelectionChange: (u) => onSelectionChange(u),
       onHoverChange: (info) => onHoverChange(info),
@@ -205,22 +234,16 @@ const GameContainer = forwardRef<GameRef, GameContainerProps>(({ onTurnChange, o
     });
     
     gameRef.current = game;
-    // Note: game.start() is now called internally by game.init() after loading is complete
 
-    // Handle Window Resize
-    const handleResize = () => {
-      if (containerRef.current && canvasRef.current && gameRef.current) {
-        const { clientWidth, clientHeight } = containerRef.current;
-        canvasRef.current.width = clientWidth;
-        canvasRef.current.height = clientHeight;
-        gameRef.current.resize(clientWidth, clientHeight);
-      }
-    };
+    // Set initial size
+    handleResize();
 
     window.addEventListener('resize', handleResize);
+    qualityManager.addListener(handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      qualityManager.removeListener(handleResize);
       game.destroy();
       gameRef.current = null;
     };
@@ -230,9 +253,15 @@ const GameContainer = forwardRef<GameRef, GameContainerProps>(({ onTurnChange, o
     <div ref={containerRef} className="w-full h-full relative bg-slate-900 overflow-hidden select-none">
       <canvas
         ref={canvasRef}
-        className="block outline-none cursor-crosshair"
+        className="block outline-none cursor-crosshair absolute inset-0 z-0 w-full h-full"
         onContextMenu={(e) => e.preventDefault()}
         tabIndex={0}
+      />
+      
+      {/* Overlay Canvas for 2D UI/Units over WebGL */}
+      <canvas 
+        ref={overlayRef}
+        className="block outline-none pointer-events-none absolute inset-0 z-10 w-full h-full"
       />
       
       {/* Loading Overlay */}
@@ -260,7 +289,7 @@ const GameContainer = forwardRef<GameRef, GameContainerProps>(({ onTurnChange, o
 
       {/* Overlay UI Layer (Only visible when loaded) */}
       {!loading.active && (
-        <div className="absolute top-4 right-4 pointer-events-none animate-in fade-in duration-1000">
+        <div className="absolute top-4 right-4 pointer-events-none animate-in fade-in duration-1000 z-50">
             <div className="bg-black/50 p-2 rounded text-xs text-white backdrop-blur-sm border border-white/10">
             <p>WASD - Камера</p>
             <p>ЛКМ - Выбор</p>

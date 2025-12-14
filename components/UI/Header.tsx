@@ -1,9 +1,9 @@
 
 import React from 'react';
-import { SkipForward, Wheat, Pickaxe, Axe, Box, Scroll, Coins, UserCheck, School, Anvil, Armchair, MapPin, Factory, Fish, Beef, Archive, Link2, Link2Off, TrendingUp, Image as ImageIcon } from 'lucide-react';
+import { SkipForward, Wheat, Pickaxe, Axe, Box, Scroll, Coins, UserCheck, School, Anvil, Armchair, MapPin, Factory, Fish, Beef, Archive, Link2, Link2Off, TrendingUp, Image as ImageIcon, Monitor } from 'lucide-react';
 import { City } from '../../Entities/City';
 import { HoverInfo } from '../../core/Game';
-import { ResourceType, TerrainType, ImprovementType } from '../../Grid/GameMap';
+import { ResourceType, ImprovementType } from '../../Grid/GameMap';
 import { getResourceName, getTerrainName, getImprovementName } from '../../utils/Localization';
 
 interface HeaderProps {
@@ -149,9 +149,9 @@ const Header: React.FC<HeaderProps> = ({ capital, hoverInfo, year, onUniversityC
                <button 
                  onClick={onAssetsClick}
                  className="flex flex-col items-center justify-center w-10 h-10 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-400 hover:text-white transition-all"
-                 title="Настройка графики"
+                 title="Настройка ассетов и графики"
                >
-                  <ImageIcon size={18} />
+                  <Monitor size={18} />
                </button>
 
                <div className="w-px h-8 bg-slate-700 mx-2"></div>

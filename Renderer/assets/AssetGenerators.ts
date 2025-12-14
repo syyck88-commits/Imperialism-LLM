@@ -1,6 +1,4 @@
 
-
-
 import { drawHexPath, ISO_FACTOR } from '../RenderUtils';
 
 export const BLOCK_DEPTH = 12;
@@ -104,13 +102,9 @@ export function generateForestFallback(): HTMLImageElement[] {
 
 // --- EROSION SIMULATION CLASSES ---
 
-// NOTE: ErosionSimulator is no longer used here as it was moved to DesertErosion.ts
-// generateDunePattern is deprecated but kept for compatibility with AssetManager imports if needed,
-// though the new system relies on DesertErosion.generate() exclusively.
-
 export function generateDunePattern(): CanvasPattern | null {
   // Placeholder returning simple noise if called, to prevent crash, 
-  // but Main Loop uses Voxel Engine now.
+  // but Main Loop uses Voxel Engine now via TerrainErosion.ts.
   const size = 64;
   const canvas = document.createElement('canvas');
   canvas.width = size;

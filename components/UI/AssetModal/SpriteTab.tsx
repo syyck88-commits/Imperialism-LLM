@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Ghost, Grid, Download } from 'lucide-react';
 import { SpriteVisualConfig, DEFAULT_SPRITE_CONFIG } from '../../../Renderer/assets/SpriteVisuals';
 import { ResourceType } from '../../../Grid/GameMap';
-import { UnitType } from '../../../Entities/Unit';
 
 interface SpriteTabProps {
     getConfig?: (key: string) => SpriteVisualConfig;
@@ -25,14 +24,14 @@ const spriteCategories = {
         { key: `RES_${ResourceType.FRUIT}`, label: 'Фрукты' },
     ],
     UNIT: [
-        { key: `UNIT_${UnitType.ENGINEER}`, label: 'Инженер' },
-        { key: `UNIT_${UnitType.SOLDIER}`, label: 'Солдат' },
-        { key: `UNIT_${UnitType.MINER}`, label: 'Шахтер' },
-        { key: `UNIT_${UnitType.FARMER}`, label: 'Фермер' },
-        { key: `UNIT_${UnitType.PROSPECTOR}`, label: 'Геолог' },
-        { key: `UNIT_${UnitType.RANCHER}`, label: 'Пастух' },
-        { key: `UNIT_${UnitType.FORESTER}`, label: 'Лесник' },
-        { key: `UNIT_${UnitType.DRILLER}`, label: 'Буровик' },
+        { key: `UNIT_Engineer`, label: 'Инженер' },
+        { key: `UNIT_Soldier`, label: 'Солдат' },
+        { key: `UNIT_Miner`, label: 'Шахтер' },
+        { key: `UNIT_Farmer`, label: 'Фермер' },
+        { key: `UNIT_Prospector`, label: 'Геолог' },
+        { key: `UNIT_Rancher`, label: 'Пастух' },
+        { key: `UNIT_Forester`, label: 'Лесник' },
+        { key: `UNIT_Driller`, label: 'Буровик' },
     ],
     STRUCT: [
         { key: 'STR_capital', label: 'Столица' },

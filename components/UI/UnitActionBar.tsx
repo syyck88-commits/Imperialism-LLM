@@ -1,14 +1,52 @@
 
-
 import React from 'react';
 import { Hammer, MapPin, Briefcase, Anchor, TrainFront, Moon, Bot, Filter, BrainCircuit, Brain } from 'lucide-react';
-import { Unit, UnitType } from '../../Entities/Unit';
+import { UnitType } from '../../Entities/Unit';
 import { Prospector, ProspectFilter, ResourceImprover, Engineer, EngineerPriority, EngineerTerrainFilter } from '../../Entities/CivilianUnit';
-import { getUnitName, getResourceName } from '../../utils/Localization';
-import { ResourceType, TerrainType } from '../../Grid/GameMap';
+import { getUnitName } from '../../utils/Localization';
+
+// Local constants to replace ResourceType Enum usage
+const RES_WHEAT = 1;
+const RES_WOOD = 2;
+const RES_COAL = 3;
+const RES_IRON = 4;
+const RES_GOLD = 5;
+const RES_WOOL = 6;
+const RES_COTTON = 7;
+const RES_FRUIT = 8;
+const RES_OIL = 9;
+const RES_SPICE = 10;
+const RES_GEMS = 11;
+const RES_MEAT = 12;
+
+// Local constants to replace TerrainType Enum usage
+const TERRAIN_PLAINS = 1;
+const TERRAIN_FOREST = 2;
+const TERRAIN_HILLS = 3;
+const TERRAIN_MOUNTAIN = 4;
+const TERRAIN_DESERT = 5;
+
+// Local helper to replace getResourceName
+const getResourceNameLocal = (r: number) => {
+    switch(r) {
+        case RES_WHEAT: return 'Пшеница';
+        case RES_WOOD: return 'Дерево';
+        case RES_COAL: return 'Уголь';
+        case RES_IRON: return 'Железо';
+        case RES_GOLD: return 'Золото';
+        case RES_GEMS: return 'Самоцветы';
+        case RES_OIL: return 'Нефть';
+        case RES_MEAT: return 'Мясо/Скот';
+        case RES_WOOL: return 'Шерсть';
+        case RES_COTTON: return 'Хлопок';
+        case RES_FRUIT: return 'Фрукты';
+        case RES_SPICE: return 'Пряности';
+        default: return 'Ресурс';
+    }
+};
 
 interface UnitActionBarProps {
-    selectedUnit: Unit;
+    selectedUnit: any;
     predictedYield: string | null;
     onAction: (action: string) => void;
     onDisband: () => void;
@@ -36,26 +74,26 @@ const UnitActionBar: React.FC<UnitActionBarProps> = ({ selectedUnit, predictedYi
         // --- Terrain List ---
         const terrainList: {key: EngineerTerrainFilter, label: string}[] = [
             { key: 'ALL', label: 'Любая местность' },
-            { key: TerrainType.PLAINS, label: 'Равнины' },
-            { key: TerrainType.FOREST, label: 'Лес' },
-            { key: TerrainType.HILLS, label: 'Холмы' },
-            { key: TerrainType.MOUNTAIN, label: 'Горы' },
-            { key: TerrainType.DESERT, label: 'Пустыня' },
+            { key: TERRAIN_PLAINS, label: 'Равнины' },
+            { key: TERRAIN_FOREST, label: 'Лес' },
+            { key: TERRAIN_HILLS, label: 'Холмы' },
+            { key: TERRAIN_MOUNTAIN, label: 'Горы' },
+            { key: TERRAIN_DESERT, label: 'Пустыня' },
         ];
 
         // --- Resource List (Filtered by Terrain) ---
-        const getResourcesForTerrain = (terrain: EngineerTerrainFilter): ResourceType[] => {
+        const getResourcesForTerrain = (terrain: EngineerTerrainFilter): number[] => {
             switch (terrain) {
                 case 'ALL': return [
-                    ResourceType.WOOD, ResourceType.COAL, ResourceType.IRON, 
-                    ResourceType.OIL, ResourceType.GOLD, ResourceType.WHEAT,
-                    ResourceType.GEMS
+                    RES_WOOD, RES_COAL, RES_IRON, 
+                    RES_OIL, RES_GOLD, RES_WHEAT,
+                    RES_GEMS
                 ];
-                case TerrainType.PLAINS: return [ResourceType.WHEAT, ResourceType.FRUIT, ResourceType.COTTON, ResourceType.MEAT];
-                case TerrainType.FOREST: return [ResourceType.WOOD];
-                case TerrainType.HILLS: return [ResourceType.COAL, ResourceType.MEAT, ResourceType.IRON]; // Iron can spawn in hills too
-                case TerrainType.MOUNTAIN: return [ResourceType.IRON, ResourceType.GOLD, ResourceType.GEMS, ResourceType.COAL];
-                case TerrainType.DESERT: return [ResourceType.OIL];
+                case TERRAIN_PLAINS: return [RES_WHEAT, RES_FRUIT, RES_COTTON, RES_MEAT];
+                case TERRAIN_FOREST: return [RES_WOOD];
+                case TERRAIN_HILLS: return [RES_COAL, RES_MEAT, RES_IRON]; // Iron can spawn in hills too
+                case TERRAIN_MOUNTAIN: return [RES_IRON, RES_GOLD, RES_GEMS, RES_COAL];
+                case TERRAIN_DESERT: return [RES_OIL];
                 default: return [];
             }
         };
@@ -64,7 +102,7 @@ const UnitActionBar: React.FC<UnitActionBarProps> = ({ selectedUnit, predictedYi
         
         const resourceList: {key: EngineerPriority, label: string}[] = [
             { key: 'GENERAL', label: 'Все ресурсы' },
-            ...availableResources.map(r => ({ key: r, label: getResourceName(r) }))
+            ...availableResources.map(r => ({ key: r as unknown as EngineerPriority, label: getResourceNameLocal(r) }))
         ];
 
         const cycleResource = () => {
@@ -241,21 +279,21 @@ const UnitActionBar: React.FC<UnitActionBarProps> = ({ selectedUnit, predictedYi
         const improver = selectedUnit as ResourceImprover;
         const currentFilter = improver.autoTargetResource; 
 
-        const getAvailableResources = (type: UnitType): ResourceType[] => {
+        const getAvailableResources = (type: UnitType): number[] => {
             switch(type) {
-                case UnitType.MINER: return [ResourceType.COAL, ResourceType.IRON, ResourceType.GOLD, ResourceType.GEMS];
-                case UnitType.FARMER: return [ResourceType.WHEAT, ResourceType.FRUIT, ResourceType.COTTON, ResourceType.SPICE];
-                case UnitType.RANCHER: return [ResourceType.MEAT, ResourceType.WOOL];
-                case UnitType.FORESTER: return [ResourceType.WOOD];
-                case UnitType.DRILLER: return [ResourceType.OIL];
+                case UnitType.MINER: return [RES_COAL, RES_IRON, RES_GOLD, RES_GEMS];
+                case UnitType.FARMER: return [RES_WHEAT, RES_FRUIT, RES_COTTON, RES_SPICE];
+                case UnitType.RANCHER: return [RES_MEAT, RES_WOOL];
+                case UnitType.FORESTER: return [RES_WOOD];
+                case UnitType.DRILLER: return [RES_OIL];
                 default: return [];
             }
         };
 
         const resources = getAvailableResources(selectedUnit.type);
-        const options: Array<{key: 'ALL' | ResourceType, label: string}> = [
+        const options: Array<{key: 'ALL' | number, label: string}> = [
             { key: 'ALL', label: 'Все' },
-            ...resources.map(r => ({ key: r, label: getResourceName(r) }))
+            ...resources.map(r => ({ key: r, label: getResourceNameLocal(r) }))
         ];
 
         const cycleFilter = () => {

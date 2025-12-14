@@ -11,7 +11,7 @@ import { City } from '../../Entities/City';
 import { ResourceType } from '../../Grid/GameMap';
 import { Economy } from '../../core/Economy';
 import { GameConfig } from '../../core/GameConfig';
-import { getResourceName, formatCost } from '../../utils/Localization';
+import { getResourceName } from '../../utils/Localization';
 
 interface IndustryModalProps {
     capital: City | null;
@@ -31,6 +31,21 @@ const IndustryModal: React.FC<IndustryModalProps> = ({ capital, onClose, onActio
     }, [feedback]);
 
     if (!capital) return null;
+
+    // Inline implementation of formatCost since it was removed from imports
+    const formatCost = (cost: any): string => {
+        const parts: string[] = [];
+        if (cost.money && cost.money > 0) parts.push(`$${cost.money}`);
+        if (cost.resources) {
+            cost.resources.forEach((r: any) => {
+                parts.push(`${r.amount} ${getResourceName(r.type)}`);
+            });
+        }
+        if (cost.expertLabor) {
+            parts.push(`${cost.expertLabor} Эксперт(а)`);
+        }
+        return parts.length > 0 ? parts.join(', ') : "Бесплатно";
+    };
 
     const handleResult = (msg: string | undefined) => {
         if (msg) {

@@ -123,7 +123,16 @@ export class CameraInput {
 
   private handleMapClick(e: MouseEvent) {
     const rect = this.canvas.getBoundingClientRect();
-    const hex = this.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Scale mouse coordinates to match canvas's internal resolution
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const scaledX = mouseX * scaleX;
+    const scaledY = mouseY * scaleY;
+
+    const hex = this.screenToWorld(scaledX, scaledY);
 
     if (this.game.map.isValid(hex.q, hex.r)) {
         if (e.button === 0) {
@@ -162,13 +171,24 @@ export class CameraInput {
       this.lastMouseY = e.clientY;
     }
 
-    if (mouseX >= 0 && mouseX <= this.canvas.width && mouseY >= 0 && mouseY <= this.canvas.height) {
-        const hex = this.screenToWorld(mouseX, mouseY);
+    // Check bounds against the display rectangle, not the internal canvas resolution
+    if (mouseX >= 0 && mouseX <= rect.width && mouseY >= 0 && mouseY <= rect.height) {
+        // Scale mouse coordinates to match canvas's internal resolution
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const scaledX = mouseX * scaleX;
+        const scaledY = mouseY * scaleY;
+
+        const hex = this.screenToWorld(scaledX, scaledY);
+        
         if (this.game.map.isValid(hex.q, hex.r)) {
             this.game.hoveredHex = hex;
         } else {
             this.game.hoveredHex = null;
         }
+    } else {
+        // This handles cases where the mouse is still moving over the window but has left the canvas rect
+        this.game.hoveredHex = null;
     }
   };
 
@@ -178,16 +198,22 @@ export class CameraInput {
     const rect = this.canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
+    
+    // Scale mouse coordinates for accurate zoom-to-cursor
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
+    const scaledX = mouseX * scaleX;
+    const scaledY = mouseY * scaleY;
 
-    const worldX_before = (mouseX / this.game.camera.zoom) + this.game.camera.x;
-    const worldY_before = (mouseY / this.game.camera.zoom) + this.game.camera.y;
+    const worldX_before = (scaledX / this.game.camera.zoom) + this.game.camera.x;
+    const worldY_before = (scaledY / this.game.camera.zoom) + this.game.camera.y;
 
     const zoomFactor = e.deltaY < 0 ? (1 + zoomIntensity) : (1 - zoomIntensity);
     let newZoom = this.game.camera.zoom * zoomFactor;
     newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, newZoom));
     
     this.game.camera.zoom = newZoom;
-    this.game.camera.x = worldX_before - (mouseX / newZoom);
-    this.game.camera.y = worldY_before - (mouseY / newZoom);
+    this.game.camera.x = worldX_before - (scaledX / newZoom);
+    this.game.camera.y = worldY_before - (scaledY / newZoom);
   };
 }

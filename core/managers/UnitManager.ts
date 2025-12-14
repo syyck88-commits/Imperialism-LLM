@@ -1,17 +1,16 @@
 
-
-import { Unit, UnitType } from '../../Entities/Unit';
+import { UnitType } from '../../Entities/Unit';
 import { Engineer, Prospector, ResourceImprover, Developer, CivilianUnit, ProspectFilter, EngineerPriority, EngineerTerrainFilter } from '../../Entities/CivilianUnit';
 import { University } from '../University';
 import { GameMap, TerrainType, ImprovementType, ResourceType } from '../../Grid/GameMap';
 import { Pathfinder } from '../../Grid/Pathfinding';
-import { Hex, getHexNeighbors, areHexesEqual } from '../../Grid/HexMath';
+import { Hex } from '../../Grid/HexMath';
 import { City } from '../../Entities/City';
 import { TransportNetwork } from '../../Logistics/TransportNetwork';
 
 export class UnitManager {
-    public units: Unit[] = [];
-    public selectedUnit: Unit | null = null;
+    public units: any[] = [];
+    public selectedUnit: any | null = null;
     public selectedHex: Hex | null = null; // For selecting empty tiles or enemy units later
     
     // Pathfinding Caches
@@ -35,7 +34,11 @@ export class UnitManager {
 
     public spawnInitialUnits(capitalHex: Hex) {
          // Get neighbors to spawn units without stacking
-         const neighbors = getHexNeighbors(capitalHex).filter(n => this.map.isValid(n.q, n.r) && this.map.getTile(n.q, n.r)?.terrain !== TerrainType.WATER && this.map.getTile(n.q, n.r)?.terrain !== TerrainType.MOUNTAIN);
+         // Inlined getHexNeighbors logic
+         const offsets = [{q:1, r:0}, {q:0, r:1}, {q:-1, r:1}, {q:-1, r:0}, {q:0, r:-1}, {q:1, r:-1}];
+         const neighborsRaw = offsets.map(d => ({ q: capitalHex.q + d.q, r: capitalHex.r + d.r }));
+
+         const neighbors = neighborsRaw.filter(n => this.map.isValid(n.q, n.r) && this.map.getTile(n.q, n.r)?.terrain !== TerrainType.WATER && this.map.getTile(n.q, n.r)?.terrain !== TerrainType.MOUNTAIN);
           
          if (neighbors.length > 0) {
            this.units.push(new Engineer('unit-eng-1', neighbors[0]));
@@ -74,14 +77,15 @@ export class UnitManager {
         this.validMovesCache = [];
     }
 
-    public selectUnit(unit: Unit) {
+    public selectUnit(unit: any) {
         this.selectedUnit = unit;
         this.selectedHex = null;
         this.validMovesCache = this.pathfinder.getMovementRange(this.selectedUnit);
     }
 
     public selectUnitAt(hex: Hex) {
-        const unit = this.units.find(u => areHexesEqual(u.location, hex));
+        // Inlined areHexesEqual
+        const unit = this.units.find(u => u.location.q === hex.q && u.location.r === hex.r);
         
         if (unit) {
             this.selectUnit(unit);
@@ -96,7 +100,8 @@ export class UnitManager {
     public moveSelectedUnit(targetHex: Hex) {
         if (!this.selectedUnit) return;
         
-        const isValid = this.validMovesCache.some(vm => areHexesEqual(vm, targetHex));
+        // Inlined areHexesEqual check
+        const isValid = this.validMovesCache.some(vm => vm.q === targetHex.q && vm.r === targetHex.r);
         if (!isValid) return;
     
         const path = this.pathfinder.getPathTo(this.selectedUnit, targetHex, this.validMovesCache);
@@ -172,7 +177,7 @@ export class UnitManager {
         }
     }
     
-    public findNextActiveUnit(): Unit | null {
+    public findNextActiveUnit(): any | null {
         return this.units.find(u => 
             u.movesLeft > 0 && 
             !u.isSleeping && 
@@ -186,7 +191,8 @@ export class UnitManager {
     }
 
     public updatePathPreview(hoveredHex: Hex | null) {
-        if (this.selectedUnit && hoveredHex && this.validMovesCache.some(vm => areHexesEqual(vm, hoveredHex))) {
+        // Inlined areHexesEqual
+        if (this.selectedUnit && hoveredHex && this.validMovesCache.some(vm => vm.q === hoveredHex.q && vm.r === hoveredHex.r)) {
             this.currentPathCache = this.pathfinder.getPathTo(this.selectedUnit, hoveredHex, this.validMovesCache);
         } else {
             this.currentPathCache = [];

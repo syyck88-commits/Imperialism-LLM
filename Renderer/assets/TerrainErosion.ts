@@ -3,12 +3,14 @@ import { GameMap, TerrainType } from '../../Grid/GameMap';
 import { TerrainGenerator, DESERT_CONFIG, MOUNTAIN_CONFIG, HILLS_CONFIG, BiomeConfig } from './TerrainGenerator';
 import { ISO_FACTOR } from '../RenderUtils';
 import { createTerrainWorkerUrl } from './terrainWorkerBlob';
+import { GPUTextureHandle } from '../core/ITexture';
 
 export interface TerrainSprite {
     x: number;
     y: number;
     canvas: HTMLCanvasElement;
     depth: number;
+    texture?: GPUTextureHandle | null;
 }
 
 interface WorkerTask {
@@ -60,11 +62,8 @@ export class TerrainErosion {
                 ctx.putImageData(imgData, 0, 0);
             }
 
-            // Find valid callback logic would go here if we tracked Task IDs, 
-            // but for simplicity we rely on the internal promise resolution scope via queue? 
-            // No, the simplistic pool needs to track requests.
-            // Since we don't have task IDs in this simple pool implementation, 
-            // we will refactor to use a simpler Promise.all approach without a complex queue manager class for this specific game loop.
+            // Note: We cannot upload to GPU here easily because this is static context.
+            // The consumer (MapRenderer) will handle texture creation.
         }
     }
 

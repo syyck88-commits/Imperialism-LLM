@@ -1,8 +1,7 @@
 
-
 import { City } from '../../Entities/City';
 import { GameMap, ImprovementType, ResourceType } from '../../Grid/GameMap';
-import { Hex, getHexNeighbors, hexToString, getHexRange } from '../../Grid/HexMath';
+import { Hex, hexToString, getHexRange } from '../../Grid/HexMath';
 import { TransportNetwork } from '../../Logistics/TransportNetwork';
 import { Economy } from '../Economy';
 

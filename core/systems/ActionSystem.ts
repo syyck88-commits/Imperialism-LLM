@@ -1,9 +1,7 @@
 
 import { Game } from '../Game';
-import { UnitType, Unit } from '../../Entities/Unit';
-import { Engineer, Prospector, ResourceImprover, Developer, ProspectFilter, EngineerPriority, EngineerTerrainFilter } from '../../Entities/CivilianUnit';
-import { City } from '../../Entities/City';
-import { ImprovementType, ResourceType, TerrainType } from '../../Grid/GameMap';
+import { UnitType } from '../../Entities/Unit';
+import { ImprovementType, ResourceType } from '../../Grid/GameMap';
 
 export class ActionSystem {
     private game: Game;
