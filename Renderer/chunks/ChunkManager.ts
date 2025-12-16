@@ -1,10 +1,9 @@
-import { ChunkData, ChunkKey, ChunkLayer, CHUNK_SIZE, CHUNK_PADDING_TILES, getChunkMetrics } from './ChunkTypes';
+
+import { ChunkData, ChunkKey, ChunkLayer, CHUNK_SIZE, CHUNK_PADDING_TILES, getChunkMetrics, ChunkRenderer } from './Chunks';
 import { GameMap, TileData } from '../../Grid/GameMap';
 import { AssetManager } from '../AssetManager';
-import { ChunkRenderer } from './ChunkRenderer';
 import { Camera, hexToScreen, ISO_FACTOR } from '../RenderUtils';
-import { GPUTextureHandle } from '../core/ITexture';
-import { GPUResourceRegistry } from '../core/GPUResourceRegistry';
+import { GPUTextureHandle, GPUResourceRegistry } from '../core/Core';
 
 const ZOOM_EPSILON = 1e-3;
 const zoomEqual = (a: number, b: number) => Math.abs(a - b) < ZOOM_EPSILON;

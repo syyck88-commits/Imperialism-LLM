@@ -1,70 +1,82 @@
-
 import { drawHexPath, ISO_FACTOR } from '../RenderUtils';
 
 export const BLOCK_DEPTH = 12;
 
-export function generateBaseFallback(): Map<string, HTMLImageElement> {
-    const hexBaseSize = 64; 
-    const tileW = Math.ceil(Math.sqrt(3) * hexBaseSize); 
-    const tileH = Math.ceil((hexBaseSize * 2 * ISO_FACTOR) + BLOCK_DEPTH + 4); 
+// --- BASE sprites in this project are 512x512, and their content is shifted upward.
+// addBaseHex() draws them with y - spriteH*0.4, so we place the hex center at 0.4*H in the source image.
+const BASE_IMG = 512;
+const BASE_CENTER_Y = Math.round(BASE_IMG * 0.40);
+const BASE_CENTER_X = BASE_IMG / 2;
+// Scale depth visually to match 512 art convention (128->512 = x4)
+const BASE_DEPTH = BLOCK_DEPTH * 4;
 
-    const createBase = (color: string, shadowColor: string): HTMLImageElement => {
+export function generateBaseFallback(): Map<string, HTMLImageElement> {
+    const createBase = (color: string, shadowColor: string, label: string): HTMLImageElement => {
         const canvas = document.createElement('canvas');
-        canvas.width = tileW;
-        canvas.height = tileH;
+        canvas.width = BASE_IMG;
+        canvas.height = BASE_IMG;
+
         const ctx = canvas.getContext('2d');
         if (ctx) {
-            const cx = tileW / 2;
-            const cy = (tileH - BLOCK_DEPTH) / 2;
-            const r = hexBaseSize - 1;
+            ctx.clearRect(0, 0, BASE_IMG, BASE_IMG);
 
-            // Draw depth sides
+            const cx = BASE_CENTER_X;
+            const cy = BASE_CENTER_Y;
+            const r = 240; // fits well inside 512
+
+            // Precompute hex points (flat-ish) with ISO squash baked in
+            const pts: { x: number; y: number }[] = [];
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 180) * (60 * i + 30);
+                pts.push({
+                    x: cx + r * Math.cos(angle),
+                    y: cy + (r * Math.sin(angle) * ISO_FACTOR)
+                });
+            }
+
+            // Depth sides polygon (same shape logic as your original)
             ctx.fillStyle = shadowColor;
             ctx.beginPath();
-            const pts = [];
-            for(let i=0; i<6; i++) {
-                    const angle = (Math.PI / 180) * (60 * i + 30);
-                    pts.push({
-                        x: cx + r * Math.cos(angle),
-                        y: cy + (r * Math.sin(angle) * ISO_FACTOR)
-                    });
-            }
             ctx.moveTo(pts[0].x, pts[0].y);
             ctx.lineTo(pts[1].x, pts[1].y);
             ctx.lineTo(pts[2].x, pts[2].y);
             ctx.lineTo(pts[3].x, pts[3].y);
-            ctx.lineTo(pts[3].x, pts[3].y + BLOCK_DEPTH);
-            ctx.lineTo(pts[2].x, pts[2].y + BLOCK_DEPTH);
-            ctx.lineTo(pts[1].x, pts[1].y + BLOCK_DEPTH);
-            ctx.lineTo(pts[0].x, pts[0].y + BLOCK_DEPTH);
+            ctx.lineTo(pts[3].x, pts[3].y + BASE_DEPTH);
+            ctx.lineTo(pts[2].x, pts[2].y + BASE_DEPTH);
+            ctx.lineTo(pts[1].x, pts[1].y + BASE_DEPTH);
+            ctx.lineTo(pts[0].x, pts[0].y + BASE_DEPTH);
             ctx.closePath();
             ctx.fill();
 
-            // Draw Top Face
+            // Top face
             ctx.beginPath();
             drawHexPath(ctx, cx, cy, r, ISO_FACTOR);
             ctx.closePath();
             ctx.fillStyle = color;
             ctx.fill();
 
-            // Slight edge highlight
-            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-            ctx.lineWidth = 1;
+            // Edge
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 4;
             ctx.stroke();
+
+            // Debug letter (big, readable)
+            ctx.fillStyle = 'rgba(0,0,0,0.30)';
+            ctx.font = 'bold 140px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, cx, cy);
         }
+
         const img = new Image();
         img.src = canvas.toDataURL();
         return img;
     };
 
     const map = new Map<string, HTMLImageElement>();
-    map.set('base_land', createBase('#c9a67f', '#a68560')); 
-    map.set('base_water', createBase('#3b82f6', '#1e3a8a'));
-    
-    // Updated Desert Base to Light Sand (#E6C88C) to blend seamlessly with lit voxels
-    // Shadow is #C69C6D (Darker sand)
-    map.set('base_desert', createBase('#E6C88C', '#C69C6D')); 
-    
+    map.set('base_land', createBase('#c9a67f', '#a68560', 'L'));
+    map.set('base_water', createBase('#3b82f6', '#1e3a8a', 'W'));
+    map.set('base_desert', createBase('#E6C88C', '#C69C6D', 'D'));
     return map;
 }
 
@@ -74,26 +86,28 @@ export function generateForestFallback(): HTMLImageElement[] {
 
     return sizes.map((size, i) => {
         const w = size;
-        const h = size * 1.5;
+        const h = Math.floor(size * 1.5);
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
+
         const ctx = canvas.getContext('2d');
         if (ctx) {
-            // Draw tree shape
             ctx.fillStyle = colors[i];
             ctx.beginPath();
-            ctx.moveTo(w/2, 0); // Tip
-            ctx.lineTo(w, h * 0.8); // Right bottom
-            ctx.lineTo(w/2, h * 0.7); // Bottom center
-            ctx.lineTo(0, h * 0.8); // Left bottom
-            ctx.closePath();
+            ctx.arc(w / 2, h * 0.45, w * 0.35, 0, Math.PI * 2);
             ctx.fill();
 
-            // Trunk
             ctx.fillStyle = '#3f2c22';
-            ctx.fillRect(w*0.4, h*0.7, w*0.2, h*0.3);
+            ctx.fillRect(w * 0.42, h * 0.62, w * 0.16, h * 0.30);
+
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.font = `bold ${Math.max(10, Math.floor(w * 0.35))}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('T', w / 2, h * 0.45);
         }
+
         const img = new Image();
         img.src = canvas.toDataURL();
         return img;
@@ -103,32 +117,45 @@ export function generateForestFallback(): HTMLImageElement[] {
 // --- EROSION SIMULATION CLASSES ---
 
 export function generateDunePattern(): CanvasPattern | null {
-  // Placeholder returning simple noise if called, to prevent crash, 
-  // but Main Loop uses Voxel Engine now via TerrainErosion.ts.
-  const size = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.fillStyle = '#C69C6D';
-  ctx.fillRect(0,0,size,size);
-  return ctx.createPattern(canvas, 'repeat');
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = '#C69C6D';
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+    ctx.lineWidth = 3;
+
+    ctx.beginPath();
+    ctx.moveTo(0, 18);
+    ctx.lineTo(size, 30);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, 42);
+    ctx.lineTo(size, 54);
+    ctx.stroke();
+
+    return ctx.createPattern(canvas, 'repeat');
 }
 
 export function generateInterfaceSprites(
-    canvas: HTMLCanvasElement, 
-    uiMap: any, 
-    uiTileW: number, 
-    uiTileH: number, 
+    canvas: HTMLCanvasElement,
+    uiMap: any,
+    uiTileW: number,
+    uiTileH: number,
     uiBaseSize: number
 ) {
     const cols = 4;
     const rows = 1;
-    
+
     canvas.width = uiTileW * cols;
     canvas.height = uiTileH * rows;
-    
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -168,7 +195,7 @@ export function generateInterfaceSprites(
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    
+
     // 4. Path Dot
     ctx.save();
     ctx.translate(uiMap.path.x * uiTileW, 0);
@@ -182,70 +209,62 @@ export function generateInterfaceSprites(
 }
 
 export function generateFallbackAtlas(
-    canvas: HTMLCanvasElement, 
-    cols: number, 
+    canvas: HTMLCanvasElement,
+    cols: number,
     rows: number
 ) {
-    const hexBaseSize = 64; 
-    const tileW = Math.ceil(Math.sqrt(3) * hexBaseSize); 
-    const tileH = Math.ceil((hexBaseSize * 2 * ISO_FACTOR) + BLOCK_DEPTH + 4); 
-    
+    const hexBaseSize = 64;
+    const tileW = Math.ceil(Math.sqrt(3) * hexBaseSize);
+    const tileH = Math.ceil((hexBaseSize * 2 * ISO_FACTOR) + BLOCK_DEPTH + 4);
+
     canvas.width = tileW * cols;
     canvas.height = tileH * rows;
-    
+
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
-    // Helper to draw the 3D block side
-    const drawBlock = (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, fillFn: () => void, depthColor: string) => {
-        const topY = cy;
-        
-        ctx.fillStyle = depthColor;
-        ctx.beginPath();
-        
-        const pts = [];
-        for(let i=0; i<6; i++) {
-                const angle = (Math.PI / 180) * (60 * i + 30);
-                pts.push({
-                    x: cx + size * Math.cos(angle),
-                    y: topY + (size * Math.sin(angle) * ISO_FACTOR)
-                });
+    const drawBlock = (ctx2: CanvasRenderingContext2D, cx: number, cy: number, size: number, fillFn: () => void, depthColor: string) => {
+        const pts: { x: number; y: number }[] = [];
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 180) * (60 * i + 30);
+            pts.push({
+                x: cx + size * Math.cos(angle),
+                y: cy + (size * Math.sin(angle) * ISO_FACTOR)
+            });
         }
 
-        ctx.moveTo(pts[0].x, pts[0].y);
-        ctx.lineTo(pts[1].x, pts[1].y);
-        ctx.lineTo(pts[2].x, pts[2].y);
-        ctx.lineTo(pts[3].x, pts[3].y);
-        ctx.lineTo(pts[3].x, pts[3].y + BLOCK_DEPTH);
-        ctx.lineTo(pts[2].x, pts[2].y + BLOCK_DEPTH);
-        ctx.lineTo(pts[1].x, pts[1].y + BLOCK_DEPTH);
-        ctx.lineTo(pts[0].x, pts[0].y + BLOCK_DEPTH);
-        ctx.closePath();
-        ctx.fill();
+        ctx2.fillStyle = depthColor;
+        ctx2.beginPath();
+        ctx2.moveTo(pts[0].x, pts[0].y);
+        ctx2.lineTo(pts[1].x, pts[1].y);
+        ctx2.lineTo(pts[2].x, pts[2].y);
+        ctx2.lineTo(pts[3].x, pts[3].y);
+        ctx2.lineTo(pts[3].x, pts[3].y + BLOCK_DEPTH);
+        ctx2.lineTo(pts[2].x, pts[2].y + BLOCK_DEPTH);
+        ctx2.lineTo(pts[1].x, pts[1].y + BLOCK_DEPTH);
+        ctx2.lineTo(pts[0].x, pts[0].y + BLOCK_DEPTH);
+        ctx2.closePath();
+        ctx2.fill();
 
-        ctx.beginPath();
-        drawHexPath(ctx, cx, cy, size, ISO_FACTOR);
-        ctx.closePath();
-        fillFn(); 
+        ctx2.beginPath();
+        drawHexPath(ctx2, cx, cy, size, ISO_FACTOR);
+        ctx2.closePath();
+        fillFn();
     };
 
-    const drawTile = (col: number, row: number, color: string, depthColor: string, detailFn?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) => {
+    const drawTile = (col: number, row: number, color: string, depthColor: string) => {
         ctx.save();
         ctx.translate(col * tileW, row * tileH);
-        
+
         const cx = tileW / 2;
         const cy = (tileH - BLOCK_DEPTH) / 2;
         const r = hexBaseSize - 1;
 
+        ctx.clearRect(0, 0, tileW, tileH);
+
         drawBlock(ctx, cx, cy, r, () => {
-                ctx.fillStyle = color;
-                ctx.fill();
-                if (detailFn) {
-                    ctx.save();
-                    ctx.clip(); 
-                    detailFn(ctx, tileW, tileH);
-                    ctx.restore();
-                }
+            ctx.fillStyle = color;
+            ctx.fill();
         }, depthColor);
 
         drawHexPath(ctx, cx, cy, r, ISO_FACTOR);
@@ -256,48 +275,10 @@ export function generateFallbackAtlas(
         ctx.restore();
     };
 
-    drawTile(0, 0, '#3b82f6', '#1e3a8a', (c, w, h) => {
-        c.fillStyle = 'rgba(255,255,255,0.1)';
-        for(let i=0; i<5; i++) {
-            const x = Math.random() * w;
-            const y = Math.random() * h;
-            c.beginPath();
-            c.arc(x, y, 5, 0, Math.PI*2);
-            c.fill();
-        }
-    });
-
+    drawTile(0, 0, '#3b82f6', '#1e3a8a');
     drawTile(1, 0, '#65a30d', '#365314');
-
-    drawTile(2, 0, '#166534', '#14532d', (c, w, h) => {
-            c.fillStyle = '#052e16';
-            for(let i=0; i<6; i++) {
-                const x = Math.random() * w*0.6 + w*0.2;
-                const y = Math.random() * h*0.4 + h*0.1;
-                c.beginPath();
-                c.moveTo(x, y);
-                c.lineTo(x+6, y+18);
-                c.lineTo(x-6, y+18);
-                c.fill();
-            }
-    });
-
-    drawTile(0, 1, '#84cc16', '#4d7c0f', (c, w, h) => {
-        c.fillStyle = 'rgba(0,0,0,0.1)';
-        c.beginPath();
-        c.arc(w/2, h/2, 15, 0, Math.PI*2);
-        c.fill();
-    });
-
-    drawTile(1, 1, '#57534e', '#292524', (c, w, h) => {
-            c.fillStyle = '#e7e5e4';
-            c.beginPath();
-            c.moveTo(w/2, 10);
-            c.lineTo(w/2 + 10, 25);
-            c.lineTo(w/2 - 10, 25);
-            c.fill();
-    });
-
-    // Updated Desert Atlas Tile
+    drawTile(2, 0, '#166534', '#14532d');
+    drawTile(0, 1, '#84cc16', '#4d7c0f');
+    drawTile(1, 1, '#57534e', '#292524');
     drawTile(2, 1, '#E6C88C', '#C69C6D');
 }

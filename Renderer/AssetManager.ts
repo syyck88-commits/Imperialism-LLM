@@ -12,8 +12,7 @@ import {
 } from './assets/AssetGenerators';
 import { SpriteVisualConfig, DEFAULT_SPRITE_CONFIG, PRESET_CONFIGS } from './assets/SpriteVisuals';
 import { unzip } from 'fflate';
-import { TextureManager } from './core/TextureManager';
-import { GPUResourceRegistry } from './core/GPUResourceRegistry';
+import { TextureManager, GPUResourceRegistry } from './core/Core';
 
 export class AssetManager {
   private readonly ATLAS_COLS = 3;
@@ -28,14 +27,17 @@ export class AssetManager {
   // PAK File Storage
   private fileMap: Map<string, string> = new Map();
 
-  // Static Cache to prevent re-downloading/unzipping on React re-renders
+  // Static Cache
   private static globalFileMap: Map<string, string> = new Map();
   private static globalLoadPromise: Promise<void> | null = null;
 
   // Specific Sprites Storage
   private loadedSprites: Map<number, HTMLImageElement> = new Map();
-  public baseSprites: Map<string, HTMLImageElement> = new Map();
-  public forestSprites: HTMLImageElement[] = [];
+  
+  // Updated types to allow canvas or image
+  public baseSprites: Map<string, HTMLImageElement | HTMLCanvasElement> = new Map();
+  public forestSprites: (HTMLImageElement | HTMLCanvasElement)[] = [];
+  
   public resourceSprites: Map<ResourceType, HTMLImageElement> = new Map();
   public dunePattern: CanvasPattern | null = null;
   
@@ -96,9 +98,7 @@ export class AssetManager {
   public initGL(gl: WebGLRenderingContext | WebGL2RenderingContext) {
       this.gl = gl;
       this.textureManager.init(gl);
-      // Re-setup elements if they were loaded before GL was ready
-      // Or if context was restored (isAtlasLoaded might be false or texture handles invalid)
-      if (this.loadedSprites.size > 0) {
+      if (this.loadedSprites.size > 0 || this.structureSprites.size > 0) {
           this.setupWebGLElements();
       }
   }
@@ -113,13 +113,10 @@ export class AssetManager {
   }
 
   private loadConfigs() {
-      // 1. Load Presets
       Object.entries(PRESET_CONFIGS).forEach(([key, cfg]) => {
-          // Cast cfg to any to avoid "Spread types may only be created from object types" error
           this.spriteConfigs.set(key, { ...DEFAULT_SPRITE_CONFIG, ...(cfg as any) });
       });
 
-      // 2. Load Overrides from Storage
       try {
           const saved = localStorage.getItem('SPRITE_CONFIGS');
           if (saved) {
@@ -144,8 +141,6 @@ export class AssetManager {
   public setConfig(key: string, config: SpriteVisualConfig) {
       this.spriteConfigs.set(key, config);
       this.saveConfigs();
-      
-      // Notify listeners (ChunkManager) that visual config changed
       window.dispatchEvent(new CustomEvent('SPRITE_CONFIG_CHANGED', { detail: { key } }));
   }
 
@@ -160,7 +155,7 @@ export class AssetManager {
   }
 
   public getSpriteImageSource(key: string): string | null {
-      let img: HTMLImageElement | undefined;
+      let img: HTMLImageElement | HTMLCanvasElement | undefined;
 
       if (key.startsWith('RES_')) {
           const id = parseInt(key.replace('RES_', ''));
@@ -178,7 +173,12 @@ export class AssetManager {
           img = this.structureSprites.get(id);
       }
 
-      return img ? img.src : null;
+      if (img) {
+          if (img instanceof HTMLImageElement) return img.src;
+          // Canvas does not have src, convert to dataURL for preview
+          return (img as HTMLCanvasElement).toDataURL();
+      }
+      return null;
   }
 
   public getSpriteUV(key: string): any | null {
@@ -186,7 +186,6 @@ export class AssetManager {
   }
 
   public getMainAtlas(): any | null {
-      // Backwards compatibility: return the first atlas
       return this.mainAtlases.length > 0 ? this.mainAtlases[0] : null;
   }
 
@@ -194,33 +193,23 @@ export class AssetManager {
       return this.mainAtlases[id] || null;
   }
 
-  // --- PAK Loading Logic ---
-
   private async unpackSprites() {
-      // 1. Check Static Cache first (Fastest)
       if (AssetManager.globalFileMap.size > 0) {
-          console.log("Using cached sprites.pak data.");
           this.fileMap = new Map(AssetManager.globalFileMap);
           return;
       }
 
-      // 2. Check if already loading (prevent parallel downloads)
       if (AssetManager.globalLoadPromise) {
-          console.log("Waiting for sprites.pak download...");
           await AssetManager.globalLoadPromise;
           this.fileMap = new Map(AssetManager.globalFileMap);
           return;
       }
 
-      // 3. Start Loading
       AssetManager.globalLoadPromise = (async () => {
           try {
               console.log("Downloading and unpacking sprites.pak...");
               const response = await fetch('/sprites.pak');
-              if (!response.ok) {
-                  // Silent fallback if missing
-                  return;
-              }
+              if (!response.ok) return;
               
               const buffer = await response.arrayBuffer();
               const data = new Uint8Array(buffer);
@@ -234,9 +223,7 @@ export class AssetManager {
               
               let count = 0;
               for (const [filename, content] of Object.entries(files)) {
-                  // Normalize path: strip 'sprites/' prefix if present
                   const cleanName = filename.replace(/^sprites\//, '');
-                  
                   if (cleanName.endsWith('.png')) {
                       const blob = new Blob([content], { type: 'image/png' });
                       const url = URL.createObjectURL(blob);
@@ -246,7 +233,7 @@ export class AssetManager {
               }
               console.log(`Unpacked ${count} sprites from sprites.pak to Global Cache`);
           } catch (e) {
-              console.warn("Failed to load/unpack sprites.pak, falling back to procedural/individual loading.", e);
+              console.warn("Failed to load/unpack sprites.pak", e);
           }
       })();
 
@@ -256,15 +243,11 @@ export class AssetManager {
 
   private async fetchImage(path: string): Promise<HTMLImageElement | null> {
       let url = this.fileMap.get(path);
-      
-      // Fallback for cases where zip might not be flat
       if (!url && !path.startsWith('sprites/')) {
            url = this.fileMap.get(`sprites/${path}`);
       }
 
       if (!url) {
-          // If NOT found in PAK, try fetching normally (maybe it's external, like terrain_atlas)
-          // But only if it looks like a relative root path
           if (path.startsWith('/')) {
               try {
                   const response = await fetch(path);
@@ -286,54 +269,48 @@ export class AssetManager {
       });
   }
 
-  // Method A: Auto-Loading Assets (from PAK or Fetch)
   private async loadAssets() {
       await this.unpackSprites();
 
-      // 0. Load Base Tiles
+      const promises: Promise<void>[] = [];
+
+      // Note: baseSprites and forestSprites are pre-filled with Canvas fallbacks synchronously.
+      // If external images load, we overwrite them.
+
       const baseFiles = ['base_land', 'base_water', 'base_desert'];
-      const basePromises = baseFiles.map(async (name) => {
-          const img = await this.fetchImage(`${name}.png`);
-          if (img) this.baseSprites.set(name, img);
+      baseFiles.forEach(name => {
+          promises.push(this.fetchImage(`${name}.png`).then(img => {
+              if (img) this.baseSprites.set(name, img);
+          }));
       });
 
-      // 0.5 Load Forest Sprites (forest_1 to forest_4)
-      const forestPromises = [1, 2, 3, 4].map(async (idx) => {
-          const img = await this.fetchImage(`forest/forest_${idx}.png`);
-          if (img) this.forestSprites[idx - 1] = img;
+      [1, 2, 3, 4].forEach(idx => {
+          promises.push(this.fetchImage(`forest/forest_${idx}.png`).then(img => {
+              if (img) this.forestSprites[idx - 1] = img;
+          }));
       });
 
-      // 1. Load Atlas (Root file, likely not in PAK or if yes, handled by fetchImage)
-      // Note: fetchImage handles absolute paths via fetch fallback
-      const atlasImg = await this.fetchImage('/terrain_atlas.png');
-      if (atlasImg) {
-          this.externalAtlas = atlasImg;
-          this.isAtlasLoaded = true;
-      }
+      promises.push(this.fetchImage('/terrain_atlas.png').then(img => {
+          if (img) {
+              this.externalAtlas = img;
+              this.isAtlasLoaded = true;
+          }
+      }));
       
-      // 1.5 Load Animal Sheet (in sprites/res)
-      const animalImg = await this.fetchImage('res/sprite_sh.png');
-      if (animalImg) {
-          this.animalSpriteSheet = animalImg;
-      }
+      promises.push(this.fetchImage('res/sprite_sh.png').then(img => {
+          if (img) this.animalSpriteSheet = img;
+      }));
 
-      // 2. Load Specific Sprites (Terrain)
       const terrainFiles: Record<number, string> = {
-          [0]: 'water',
-          [1]: 'plane',
-          [2]: 'forest',
-          [3]: 'hills',
-          [4]: 'rock',
-          [5]: 'sand',
+          [0]: 'water', [1]: 'plane', [2]: 'forest', [3]: 'hills', [4]: 'rock', [5]: 'sand',
       };
 
-      const terrainPromises = Object.entries(terrainFiles).map(async ([typeVal, name]) => {
-          const type = Number(typeVal);
-          const img = await this.fetchImage(`${name}.png`);
-          if (img) this.loadedSprites.set(type, img);
+      Object.entries(terrainFiles).forEach(([typeVal, name]) => {
+          promises.push(this.fetchImage(`${name}.png`).then(img => {
+              if (img) this.loadedSprites.set(Number(typeVal), img);
+          }));
       });
 
-      // 3. Load Unit Sprites
       const unitFiles: Record<string, string> = {
           [UnitType.ENGINEER]: 'units/engineer',
           [UnitType.FARMER]: 'units/farmer',
@@ -345,76 +322,53 @@ export class AssetManager {
           [UnitType.DRILLER]: 'units/oilman'
       };
 
-      const unitPromises = Object.entries(unitFiles).map(async ([typeVal, name]) => {
-          const type = typeVal as UnitType;
-          const img = await this.fetchImage(`${name}.png`);
-          if (img) this.unitSprites.set(type, img);
+      Object.entries(unitFiles).forEach(([typeVal, name]) => {
+          promises.push(this.fetchImage(`${name}.png`).then(img => {
+              if (img) this.unitSprites.set(typeVal as UnitType, img);
+          }));
       });
 
-      // 4. Load Structure Sprites
       const structureFiles: Record<string, string> = {
-          'capital': 'capitol',
-          'depot': 'depo',
-          'plantation': 'orchard', // Generic fallback
-          
-          'farm': 'res_build/wheat',
-          'mine': 'res_build/mine',
-          'lumber_mill': 'res_build/forester_hatch',
-          'oil_well': 'res_build/oil_drill',
-          'port': 'res_build/port',
-          'plantation_cotton': 'res_build/cotton',
-          'plantation_fruit': 'res_build/fruit',
-          
-          'ranch_wool': 'res_build/wool',
+          'capital': 'capitol', 'depot': 'depo', 'plantation': 'orchard',
+          'farm': 'res_build/wheat', 'mine': 'res_build/mine',
+          'lumber_mill': 'res_build/forester_hatch', 'oil_well': 'res_build/oil_drill',
+          'port': 'res_build/port', 'plantation_cotton': 'res_build/cotton',
+          'plantation_fruit': 'res_build/fruit', 'ranch_wool': 'res_build/wool',
           'ranch_livestock': 'res_build/live_stock'
       };
 
-      const structurePromises = Object.entries(structureFiles).map(async ([key, name]) => {
-          const img = await this.fetchImage(`${name}.png`);
-          if (img) this.structureSprites.set(key, img);
+      Object.entries(structureFiles).forEach(([key, name]) => {
+          promises.push(this.fetchImage(`${name}.png`).then(img => {
+              if (img) this.structureSprites.set(key, img);
+          }));
       });
       
-      // 5. Load Resource Sprites
       const resFiles: Record<string, string> = {
-          [ResourceType.COAL]: 'coal',
-          [ResourceType.GEMS]: 'gems',
-          [ResourceType.GOLD]: 'gold',
-          [ResourceType.IRON]: 'iron',
-          [ResourceType.OIL]: 'oil',
-          [ResourceType.WHEAT]: 'wheat',
-          [ResourceType.MEAT]: 'meat',
-          [ResourceType.FRUIT]: 'fruit',
+          [ResourceType.COAL]: 'coal', [ResourceType.GEMS]: 'gems',
+          [ResourceType.GOLD]: 'gold', [ResourceType.IRON]: 'iron',
+          [ResourceType.OIL]: 'oil', [ResourceType.WHEAT]: 'wheat',
+          [ResourceType.MEAT]: 'meat', [ResourceType.FRUIT]: 'fruit',
           [ResourceType.COTTON]: 'cotton'
       };
 
-      const resPromises = Object.entries(resFiles).map(async ([typeVal, name]) => {
-          const type = Number(typeVal) as ResourceType;
-          const img = await this.fetchImage(`res/${name}.png`);
-          if (img) this.resourceSprites.set(type, img);
+      Object.entries(resFiles).forEach(([typeVal, name]) => {
+          promises.push(this.fetchImage(`res/${name}.png`).then(img => {
+              if (img) this.resourceSprites.set(Number(typeVal) as ResourceType, img);
+          }));
       });
       
-      await Promise.all([
-          ...basePromises, ...forestPromises, ...terrainPromises, 
-          ...unitPromises, ...structurePromises, ...resPromises
-      ]);
+      await Promise.all(promises);
 
-      // Post-load: Prepare WebGL Resources
-      // Only invoke setup if context is available. 
-      // If loaded before GL init, initGL() will handle it.
       if (this.gl) {
           this.setupWebGLElements();
       }
   }
 
-  /**
-   * Prepares assets for WebGL rendering by creating a texture atlas and mapping UVs.
-   */
   private setupWebGLElements() {
-      if (!this.gl) return; // Defensive check
+      if (!this.gl) return;
 
       const allAssets = new Map<string, HTMLImageElement | HTMLCanvasElement>();
 
-      // 1. Collect all assets with unified keys
       this.baseSprites.forEach((img, key) => allAssets.set(`BASE_${key}`, img));
       this.loadedSprites.forEach((img, key) => allAssets.set(`TERRAIN_${key}`, img));
       this.forestSprites.forEach((img, idx) => allAssets.set(`FOREST_${idx + 1}`, img));
@@ -422,7 +376,8 @@ export class AssetManager {
       this.structureSprites.forEach((img, key) => allAssets.set(`STR_${key}`, img));
       this.resourceSprites.forEach((img, key) => allAssets.set(`RES_${key}`, img));
 
-      // 2. Create Atlas (Multi-Atlas Support)
+      console.log(`AssetManager: Compiling atlas with ${allAssets.size} sprites...`);
+
       const result = this.textureManager.createTextureAtlas(allAssets);
 
       if (result) {
@@ -430,12 +385,9 @@ export class AssetManager {
           this.spriteAtlasUVs = result.rects;
           this.isAtlasLoaded = true;
           console.log(`AssetManager: Created ${this.mainAtlases.length} texture atlas(es).`);
-      } else {
-          console.error("AssetManager: Failed to create texture atlas.");
       }
   }
 
-  // Method B: User Uploads
   public async uploadSprite(type: number, file: File): Promise<void> {
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -446,7 +398,6 @@ export class AssetManager {
                   try {
                       await img.decode();
                       this.loadedSprites.set(type, img);
-                      // Update WebGL assets dynamically
                       if (this.gl) {
                           this.setupWebGLElements();
                       }
@@ -464,7 +415,7 @@ export class AssetManager {
       return this.loadedSprites.get(type) || null;
   }
 
-  public getBaseSprite(type: 'land' | 'water' | 'desert'): HTMLImageElement | null {
+  public getBaseSprite(type: 'land' | 'water' | 'desert'): HTMLImageElement | HTMLCanvasElement | null {
       if (type === 'land') return this.baseSprites.get('base_land') || null;
       if (type === 'water') return this.baseSprites.get('base_water') || null;
       if (type === 'desert') return this.baseSprites.get('base_desert') || null;
@@ -483,7 +434,7 @@ export class AssetManager {
       return this.resourceSprites.get(type) || null;
   }
 
-  public getForestSprite(variant: number): HTMLImageElement | null {
+  public getForestSprite(variant: number): HTMLImageElement | HTMLCanvasElement | null {
       const idx = Math.max(0, Math.min(3, variant - 1));
       return this.forestSprites[idx] || null;
   }

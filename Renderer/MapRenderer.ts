@@ -3,7 +3,7 @@ import { TerrainType, TileData, ResourceType, ImprovementType } from '../Grid/Ga
 import { AssetManager } from './AssetManager';
 import { Camera, hexToScreen, ISO_FACTOR } from './RenderUtils';
 import { ChunkManager } from './chunks/ChunkManager';
-import { ChunkData, ChunkLayer, NativeContext, CHUNK_SIZE } from './chunks/ChunkTypes';
+import { ChunkData, ChunkLayer, NativeContext, CHUNK_SIZE } from './chunks/Chunks';
 import { Unit } from '../Entities/Unit';
 import { City } from '../Entities/City';
 import { Hex } from '../Grid/HexMath';
@@ -11,13 +11,10 @@ import { AnimalManager } from './effects/AnimalManager';
 import { ForestManager } from './effects/ForestManager';
 import { AnimalInstancingManager } from './effects/AnimalInstancingManager';
 import { MapOverlayInstancingManager } from './effects/MapOverlayInstancingManager';
-import { UnitDrawer } from './drawers/UnitDrawer';
-import { OverlayDrawer } from './drawers/OverlayDrawer';
-import { WebGLProgramManager } from './core/WebGLProgramManager';
-import { GPUTextureHandle } from './core/ITexture';
+import { UnitDrawer, OverlayDrawer } from './drawers/Drawers';
+import { WebGLProgramManager, GPUTextureHandle, GPUResourceRegistry } from './core/Core';
 import { TerrainErosion } from './assets/TerrainErosion';
 import { TerrainClustering } from './TerrainClustering';
-import { GPUResourceRegistry } from './core/GPUResourceRegistry';
 
 export class MapRenderer {
     public map: any;

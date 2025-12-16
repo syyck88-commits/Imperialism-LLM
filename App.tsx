@@ -390,6 +390,7 @@ const App: React.FC = () => {
               getConfig={getConfig}
               setConfig={setConfig}
               getSpriteSource={getSpriteSource}
+              onSetWindStrength={(val) => gameRef.current?.setWindStrength(val)}
           />
       )}
 

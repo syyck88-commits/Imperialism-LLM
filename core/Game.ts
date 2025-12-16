@@ -16,10 +16,9 @@ import { UnitManager } from './managers/UnitManager';
 import { ActionSystem } from './systems/ActionSystem';
 import { SimulationSystem } from './systems/SimulationSystem';
 
-import { WebGLContext } from '../Renderer/core/WebGLContext';
-import { GPUResourceRegistry } from '../Renderer/core/GPUResourceRegistry';
+import { WebGLContext, GPUResourceRegistry } from '../Renderer/core/Core';
 // Fix: Import `ChunkLayer` to resolve 'Cannot find name' error.
-import { ChunkLayer } from '../Renderer/chunks/ChunkTypes';
+import { ChunkLayer } from '../Renderer/chunks/Chunks';
 
 import { QualityManager } from './quality/QualityManager';
 

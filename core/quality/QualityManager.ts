@@ -82,27 +82,33 @@ export class QualityManager {
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
             
-            // Fix: Type guard to ensure gl is a WebGL context before using WebGL-specific methods.
-            // The error suggests TypeScript considers `gl` could be a different rendering context (like Canvas2D),
-            // which lacks the required properties. This also handles the case where `gl` is null.
             if (!(gl instanceof WebGLRenderingContext)) {
-                return 'low';
+                return 'very_low';
             }
 
             const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
             const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : '';
             const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
 
-            if (renderer.match(/intel|integrated|apple/i)) {
-                return maxTexSize >= 8192 ? 'medium' : 'low';
+            // Detect Intel HD Graphics specifically
+            if (renderer.match(/intel/i) || renderer.match(/integrated/i)) {
+                if (maxTexSize < 4096) return 'very_low'; // Very old
+                if (maxTexSize < 8192) return 'low';
+                return 'medium';
             }
+            
+            // Mobile/Apple
+            if (renderer.match(/apple/i)) {
+                return 'medium';
+            }
+
             if (maxTexSize < 8192) {
                 return 'medium';
             }
 
             return 'high';
         } catch (e) {
-            return 'low';
+            return 'very_low';
         }
     }
 
@@ -125,14 +131,19 @@ export class QualityManager {
 
         // Step down
         if (this.smoothedFps < 55) {
-            if (this.settings.renderScale > 0.8) {
-                this.settings.renderScale = Math.max(0.75, this.settings.renderScale - 0.1);
+            if (this.settings.renderScale > 0.5) {
+                this.settings.renderScale = Math.max(0.5, this.settings.renderScale - 0.1);
                 console.log('[QualityManager.Auto] Low FPS, reducing renderScale to', this.settings.renderScale.toFixed(2));
                 this.lastAdaptationTime = now;
                 this.notifyListeners();
-            } else if (this.settings.visibleChunkPadding > 1) {
+            } else if (this.settings.visibleChunkPadding > 0) {
                 this.settings.visibleChunkPadding--;
                 console.log('[QualityManager.Auto] Low FPS, reducing chunk padding to', this.settings.visibleChunkPadding);
+                this.lastAdaptationTime = now;
+                this.notifyListeners();
+            } else if (this.settings.shadowsEnabled) {
+                this.settings.shadowsEnabled = false;
+                console.log('[QualityManager.Auto] Low FPS, disabling shadows');
                 this.lastAdaptationTime = now;
                 this.notifyListeners();
             }

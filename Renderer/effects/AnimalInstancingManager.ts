@@ -1,11 +1,11 @@
+
 import { GameMap, ResourceType, ImprovementType } from '../../Grid/GameMap';
 import { AssetManager } from '../AssetManager';
 import { Camera, hexToScreen } from '../RenderUtils';
-import { WebGLProgramManager } from '../core/WebGLProgramManager';
+import { WebGLProgramManager, GPUTextureHandle, GPUResourceRegistry } from '../core/Core';
 import { AnimalManager, AnimalInstance } from './AnimalManager';
-import { ChunkData, CHUNK_SIZE } from '../chunks/ChunkTypes';
-import { GPUTextureHandle } from '../core/ITexture';
-import { GPUResourceRegistry } from '../core/GPUResourceRegistry';
+import { ChunkData, CHUNK_SIZE } from '../chunks/Chunks';
+import { QualityManager } from '../../core/quality/QualityManager';
 
 const INSTANCE_FLOAT_COUNT = 9; // x, y, w, h, u, v, uw, vh, flip
 
@@ -177,6 +177,7 @@ export class AnimalInstancingManager {
 
         const gl = this.gl;
         const adapter = this.instancingAdapter!;
+        const quality = QualityManager.getInstance().getSettings();
 
         // --- 1. GATHER & SORT ---
         interface RenderItem {
@@ -210,18 +211,29 @@ export class AnimalInstancingManager {
                     const tile = this.map.getTile(q, r);
                     if (!tile || tile.isHidden || (tile.resource !== ResourceType.MEAT && tile.resource !== ResourceType.WOOL)) continue;
 
-                    let animals = this.animalManager.getAnimals(`${q},${r}`);
+                    const tileKey = `${q},${r}`;
+                    let animals = this.animalManager.getAnimals(tileKey);
                     if (!animals || animals.length === 0) {
                         animals = this.animalManager.getOrSpawnAnimals({q, r}, tile.resource);
                     }
 
                     const config = this.assets.getConfig(`RES_${tile.resource}`);
-                    const hasRanch = tile.improvement === ImprovementType.RANCH;
-                    const spreadMult = hasRanch ? 1.0 : (config.clumpSpread || 1.0);
+                    
+                    // --- Min Population Logic ---
+                    // Only apply min clump logic if quality permits > 1 item
+                    if ((quality.maxClumpCount === 0 || quality.maxClumpCount > 1) && config.clumpMin > 0 && animals.length < config.clumpMin) {
+                        this.animalManager.ensurePopulation(tileKey, tile.resource, config.clumpMin);
+                        animals = this.animalManager.getAnimals(tileKey) || animals;
+                    }
+
+                    // --- Fix: Apply Clump Max and Spread ---
+                    const spreadMult = config.clumpSpread || 1.0;
                     const pos = hexToScreen(q, r, camera, this.hexSize);
                     
+                    // Priority: Quality Limit > Config Limit
                     let count = animals.length;
-                    if (config.clumpMax > 0 && count > config.clumpMax) count = config.clumpMax;
+                    if (quality.maxClumpCount > 0 && count > quality.maxClumpCount) count = quality.maxClumpCount;
+                    else if (config.clumpMax > 0 && count > config.clumpMax) count = config.clumpMax;
                     
                     const baseScale = 0.5 * config.scale;
                     const drawH = currentHexSize * baseScale;
@@ -293,35 +305,44 @@ export class AnimalInstancingManager {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        // --- 3. SHADOW PASS ---
-        let idx = 0;
-        for (const item of renderQueue) {
-            const { config, animalBaseX, animalBaseY, scaleFactor } = item;
-            const shadowScale = config.shadowScale ?? 0;
+        // --- 3. SHADOW PASS (Conditional) ---
+        if (quality.shadowsEnabled) {
+            let idx = 0;
+            let shadowCount = 0;
             
-            if ((config.drawShadow ?? true) && shadowScale > 0) {
-                const shadowW = 8 * scaleFactor * shadowScale * 2;
-                const shadowH = 4 * scaleFactor * shadowScale * 2;
-                const shadowShiftX = (config.shadowX || 0) * scaleFactor;
-                const shadowShiftY = (config.shadowY || 0) * scaleFactor;
-                const shadowCenterX = animalBaseX + shadowShiftX;
-                const shadowCenterY = animalBaseY + shadowShiftY;
+            for (const item of renderQueue) {
+                const { config, animalBaseX, animalBaseY, scaleFactor } = item;
+                const shadowScale = config.shadowScale ?? 0;
+                
+                if ((config.drawShadow ?? true) && shadowScale > 0) {
+                    const shadowW = 8 * scaleFactor * shadowScale * 2;
+                    const shadowH = 4 * scaleFactor * shadowScale * 2;
+                    const shadowShiftX = (config.shadowX || 0) * scaleFactor;
+                    const shadowShiftY = (config.shadowY || 0) * scaleFactor;
+                    const shadowCenterX = animalBaseX + shadowShiftX;
+                    const shadowCenterY = animalBaseY + shadowShiftY;
 
-                this.instanceData[idx++] = shadowCenterX - shadowW / 2;
-                this.instanceData[idx++] = shadowCenterY - shadowH / 2;
-                this.instanceData[idx++] = shadowW;
-                this.instanceData[idx++] = shadowH;
-                idx += 5; // Skip UVs and flip
-            } else {
-                idx += INSTANCE_FLOAT_COUNT; // Skip instance if no shadow
+                    this.instanceData[idx++] = shadowCenterX - shadowW / 2;
+                    this.instanceData[idx++] = shadowCenterY - shadowH / 2;
+                    this.instanceData[idx++] = shadowW;
+                    this.instanceData[idx++] = shadowH;
+                    idx += 5; // Skip UVs and flip
+                    shadowCount++;
+                } else {
+                    // Fill dummy data for alignment if mixed (not needed here as we repack active buffer)
+                    // but since we draw range 0..shadowCount, we just skip pushing to buffer.
+                }
+            }
+            
+            if (shadowCount > 0) {
+                gl.uniform1f(this.uPass, 0.0);
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, shadowCount * INSTANCE_FLOAT_COUNT));
+                adapter.drawArraysInstanced(gl.TRIANGLES, 0, 6, shadowCount);
             }
         }
-        gl.uniform1f(this.uPass, 0.0);
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.instanceData.subarray(0, idx));
-        adapter.drawArraysInstanced(gl.TRIANGLES, 0, 6, renderQueue.length);
 
         // --- 4. SPRITE PASS ---
-        idx = 0;
+        let idx = 0;
         for (const item of renderQueue) {
             this.instanceData[idx++] = item.x;
             this.instanceData[idx++] = item.y;

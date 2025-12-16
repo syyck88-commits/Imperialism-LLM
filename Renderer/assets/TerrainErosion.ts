@@ -3,7 +3,7 @@ import { GameMap, TerrainType } from '../../Grid/GameMap';
 import { TerrainGenerator, DESERT_CONFIG, MOUNTAIN_CONFIG, HILLS_CONFIG, BiomeConfig } from './TerrainGenerator';
 import { ISO_FACTOR } from '../RenderUtils';
 import { createTerrainWorkerUrl } from './terrainWorkerBlob';
-import { GPUTextureHandle } from '../core/ITexture';
+import { GPUTextureHandle } from '../core/Core';
 
 export interface TerrainSprite {
     x: number;

@@ -14,9 +14,10 @@ interface AssetModalProps {
     getConfig?: (key: string) => SpriteVisualConfig;
     setConfig?: (key: string, cfg: SpriteVisualConfig) => void;
     getSpriteSource?: (key: string) => string | null;
+    onSetWindStrength?: (val: number) => void;
 }
 
-const AssetModal: React.FC<AssetModalProps> = ({ onClose, getConfig, setConfig, getSpriteSource, onRegenerate }) => {
+const AssetModal: React.FC<AssetModalProps> = ({ onClose, getConfig, setConfig, getSpriteSource, onRegenerate, onSetWindStrength }) => {
     const [activeTab, setActiveTab] = useState<'QUALITY' | 'BIOME' | 'SPRITES'>('QUALITY');
 
     return (
@@ -59,7 +60,7 @@ const AssetModal: React.FC<AssetModalProps> = ({ onClose, getConfig, setConfig, 
                         <QualityTab />
                     )}
                     {activeTab === 'BIOME' && (
-                        <BiomeTab onRegenerate={onRegenerate} />
+                        <BiomeTab onRegenerate={onRegenerate} onSetWindStrength={onSetWindStrength} />
                     )}
                     {activeTab === 'SPRITES' && (
                         <SpriteTab 

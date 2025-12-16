@@ -1,9 +1,9 @@
+
 import { GameMap, ImprovementType, TerrainType } from '../../Grid/GameMap';
 import { Hex, hexToString } from '../../Grid/HexMath';
 import { AssetManager } from '../AssetManager';
 import { Camera, ISO_FACTOR, hexToScreen } from '../RenderUtils';
-import { WebGLProgramManager } from '../core/WebGLProgramManager';
-import { AtlasUVRect } from '../core/ITexture';
+import { WebGLProgramManager, AtlasUVRect } from '../core/Core';
 
 // Helper to generate deterministic random numbers
 function pseudoRandom(seed: number): number {

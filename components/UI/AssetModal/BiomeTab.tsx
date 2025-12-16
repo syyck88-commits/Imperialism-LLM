@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Mountain, Waves, LandPlot, Palette, Undo, Download, RefreshCw } from 'lucide-react';
+import { Mountain, Waves, LandPlot, Palette, Undo, Download, RefreshCw, Wind } from 'lucide-react';
 import { TerrainGenerator, DESERT_CONFIG, MOUNTAIN_CONFIG, HILLS_CONFIG, BiomeConfig } from '../../../Renderer/assets/TerrainGenerator';
 
 const DEFAULT_DESERT: BiomeConfig = {
@@ -56,13 +56,15 @@ const DEFAULT_HILLS: BiomeConfig = {
 
 interface BiomeTabProps {
     onRegenerate?: () => Promise<void>;
+    onSetWindStrength?: (val: number) => void;
 }
 
-export const BiomeTab: React.FC<BiomeTabProps> = ({ onRegenerate }) => {
+export const BiomeTab: React.FC<BiomeTabProps> = ({ onRegenerate, onSetWindStrength }) => {
     const [biomeType, setBiomeType] = useState<'DESERT' | 'MOUNTAIN' | 'HILLS'>('DESERT');
     const [config, setBiomeConfig] = useState<BiomeConfig>({ ...DESERT_CONFIG });
     const previewCanvasRef = useRef<HTMLCanvasElement>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [windVal, setWindVal] = useState(0.5);
 
     // Load Config
     useEffect(() => {
@@ -135,6 +137,11 @@ export const BiomeTab: React.FC<BiomeTabProps> = ({ onRegenerate }) => {
         setBiomeConfig(prev => ({ ...prev, [key]: val }));
     };
 
+    const handleWindChange = (val: number) => {
+        setWindVal(val);
+        if (onSetWindStrength) onSetWindStrength(val);
+    };
+
     const getBiomeLabel = () => {
         if (biomeType === 'DESERT') return 'Пустыня';
         if (biomeType === 'MOUNTAIN') return 'Горы';
@@ -184,7 +191,18 @@ export const BiomeTab: React.FC<BiomeTabProps> = ({ onRegenerate }) => {
                 </div>
             </div>
 
-            {/* Configs */}
+            {/* Global Settings */}
+            <div className="bg-slate-800 p-3 rounded space-y-2">
+                 <div className="flex items-center gap-2 mb-2 text-slate-400 font-bold text-xs uppercase">
+                     <Wind size={12} /> Глобальные Эффекты
+                 </div>
+                 <div className="pt-2 border-t border-slate-700 mt-2">
+                    <div className="flex justify-between mb-1"><label>Сила ветра</label><span>{windVal.toFixed(1)}</span></div>
+                    <input type="range" min="0" max="2.0" step="0.1" value={windVal} onChange={(e) => handleWindChange(+e.target.value)} className="w-full accent-blue-400" />
+                 </div>
+            </div>
+
+            {/* Biome Configs */}
             <div className="bg-slate-800 p-3 rounded space-y-2">
                  <div className="flex items-center gap-2 mb-2 text-slate-400 font-bold text-xs uppercase">
                      <Palette size={12} /> Цветовая схема

@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
-import { Monitor, TrendingDown, Zap, BarChart, Sun } from 'lucide-react';
+import { Monitor, TrendingDown, Zap, BarChart, Sun, BatteryLow } from 'lucide-react';
 import { QualityManager } from '../../../core/quality/QualityManager';
 import { GraphicsQualityLevel } from '../../../core/quality/types';
 
 const levels: { key: GraphicsQualityLevel; label: string; icon: React.ReactNode }[] = [
     { key: 'auto', label: 'Авто', icon: <Zap size={14} /> },
-    { key: 'low', label: 'Низкое', icon: <TrendingDown size={14} /> },
-    { key: 'medium', label: 'Среднее', icon: <BarChart size={14} /> },
-    { key: 'high', label: 'Высокое', icon: <Sun size={14} /> },
+    { key: 'very_low', label: 'Мин.', icon: <BatteryLow size={14} /> },
+    { key: 'low', label: 'Низк.', icon: <TrendingDown size={14} /> },
+    { key: 'medium', label: 'Сред.', icon: <BarChart size={14} /> },
+    { key: 'high', label: 'Выс.', icon: <Sun size={14} /> },
 ];
 
 export const QualityTab: React.FC = () => {
@@ -20,13 +21,15 @@ export const QualityTab: React.FC = () => {
         setLevel(newLevel);
     };
 
+    const settings = qualityManager.getSettings();
+
     return (
         <div className="space-y-4 text-sm text-slate-300">
             <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase">
                 <Monitor size={14} /> Качество графики
             </div>
             <p className="text-xs text-slate-500">
-                Настройте качество графики для лучшей производительности. 'Авто' будет адаптироваться под ваш FPS.
+                "Мин" отключает тени и уменьшает кол-во объектов до 1. Идеально для старых ноутбуков.
             </p>
 
             <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1 flex-wrap">
@@ -46,23 +49,31 @@ export const QualityTab: React.FC = () => {
             <div className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-2 text-xs">
                 <div className="flex justify-between">
                     <span className="text-slate-400">Масштаб рендера:</span>
-                    <span className="font-mono text-white">{qualityManager.getSettings().renderScale * 100}%</span>
+                    <span className="font-mono text-white">{Math.round(settings.renderScale * 100)}%</span>
+                </div>
+                <div className="flex justify-between">
+                    <span className="text-slate-400">Тени:</span>
+                    <span className={`font-mono ${settings.shadowsEnabled ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {settings.shadowsEnabled ? 'Вкл' : 'Выкл'}
+                    </span>
+                </div>
+                <div className="flex justify-between">
+                    <span className="text-slate-400">Детализация (Clump):</span>
+                    <span className="font-mono text-white">
+                        {settings.maxClumpCount === 1 ? '1 объект' : 'Максимум'}
+                    </span>
                 </div>
                 <div className="flex justify-between">
                     <span className="text-slate-400">Бюджет VRAM:</span>
-                    <span className="font-mono text-white">{qualityManager.getSettings().vramBudgetMB} MB</span>
+                    <span className="font-mono text-white">{settings.vramBudgetMB} MB</span>
                 </div>
                 <div className="flex justify-between">
-                    <span className="text-slate-400">Дальность прорисовки:</span>
-                    <span className="font-mono text-white">{qualityManager.getSettings().visibleChunkPadding}</span>
-                </div>
-                <div className="flex justify-between">
-                    <span className="text-slate-400">Анимации животных:</span>
-                    <span className="font-mono text-white">{qualityManager.getSettings().animalsUpdateHz} Гц</span>
+                    <span className="text-slate-400">Анимации:</span>
+                    <span className="font-mono text-white">{settings.animalsUpdateHz} Гц</span>
                 </div>
                  <div className="flex justify-between">
-                    <span className="text-slate-400">Анимация ветра:</span>
-                    <span className="font-mono text-white">{qualityManager.getSettings().enableWindAnimation ? 'Вкл' : 'Выкл'}</span>
+                    <span className="text-slate-400">Ветер:</span>
+                    <span className="font-mono text-white">{settings.enableWindAnimation ? 'Вкл' : 'Выкл'}</span>
                 </div>
             </div>
         </div>

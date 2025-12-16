@@ -34,7 +34,7 @@ export class AnimalManager {
     constructor() {
         const qualityManager = QualityManager.getInstance();
         const settings = qualityManager.getSettings();
-        this.updateInterval = 1000 / settings.animalsUpdateHz;
+        this.updateInterval = settings.animalsUpdateHz > 0 ? 1000 / settings.animalsUpdateHz : Infinity;
         
         qualityManager.addListener((newSettings) => {
             if(newSettings.animalsUpdateHz > 0) {
@@ -133,19 +133,44 @@ export class AnimalManager {
 
         const newGroup: AnimalInstance[] = [];
         
+        // Respect global quality limit even on spawn
+        const maxClumps = QualityManager.getInstance().getSettings().maxClumpCount;
+        const spawnLimit = maxClumps > 0 ? maxClumps : 3;
+
         if (resourceType === ResourceType.WOOL) {
-            // Spawn 3 Sheep by default (overriden by renderer clump max)
-            for(let i=0; i<3; i++) this.spawn(newGroup, 0);
+            // Spawn Sheep
+            for(let i=0; i < spawnLimit; i++) this.spawn(newGroup, 0);
         } else if (resourceType === ResourceType.MEAT) {
-            // Spawn 2 Cows, 1 Bull chance
-            this.spawn(newGroup, 1);
-            this.spawn(newGroup, 1);
-            if (Math.random() > 0.7) this.spawn(newGroup, 2); // Bull
-            else this.spawn(newGroup, 1); // Cow
+            // Spawn Cows/Bulls
+            for(let i=0; i < spawnLimit; i++) {
+                if (i === 0) this.spawn(newGroup, 1); // Ensure at least 1 cow
+                else if (Math.random() > 0.7) this.spawn(newGroup, 2); // Bull chance
+                else this.spawn(newGroup, 1);
+            }
         }
 
         this.animals.set(key, newGroup);
         return newGroup;
+    }
+
+    public ensurePopulation(key: string, resourceType: ResourceType, minCount: number) {
+        const group = this.animals.get(key);
+        if (!group) return;
+
+        // Force cap based on quality
+        const maxClumps = QualityManager.getInstance().getSettings().maxClumpCount;
+        const effectiveMin = maxClumps > 0 ? Math.min(minCount, maxClumps) : minCount;
+
+        // If current count is less than required minimum, spawn more
+        while (group.length < effectiveMin) {
+            if (resourceType === ResourceType.WOOL) {
+                this.spawn(group, 0); // Sheep
+            } else {
+                // Cow/Bull chance
+                if (Math.random() > 0.7) this.spawn(group, 2); // Bull
+                else this.spawn(group, 1); // Cow
+            }
+        }
     }
 
     private spawn(group: AnimalInstance[], variant: number) {
@@ -182,22 +207,28 @@ export class AnimalManager {
         let animals = this.getOrSpawnAnimals(hex, resourceType);
         const sheet = assets.animalSpriteSheet;
         const config = assets.getConfig(`RES_${resourceType}`);
+        const quality = QualityManager.getInstance().getSettings();
         
         // --- Apply CLUMP Counts ---
-        // If config specifies Clump limits, we slice the array or spawn more
-        // For animals, we'll just slice max or use min if needed (simple)
-        let renderList = animals;
         
-        if (config.clumpMax > 0 && animals.length > config.clumpMax) {
-            renderList = animals.slice(0, config.clumpMax);
-        }
-        else if (config.clumpMin > 0 && animals.length < config.clumpMin) {
-            // Need more? Spawn
-            const typeVar = resourceType === ResourceType.WOOL ? 0 : 1;
-            while (animals.length < config.clumpMin) {
-                this.spawn(animals, typeVar);
+        // 1. Quality Limit Override
+        let renderList = animals;
+        if (quality.maxClumpCount > 0 && animals.length > quality.maxClumpCount) {
+            renderList = animals.slice(0, quality.maxClumpCount);
+        } else {
+            // 2. Config Max Count slicing
+            if (config.clumpMax > 0 && animals.length > config.clumpMax) {
+                renderList = animals.slice(0, config.clumpMax);
             }
-            renderList = animals;
+            
+            // 3. Min Count enforcement (Only if quality allows)
+            if (config.clumpMin > 0 && animals.length < config.clumpMin) {
+                const key = hexToString(hex);
+                this.ensurePopulation(key, resourceType, config.clumpMin);
+                animals = this.animals.get(key) || animals;
+                // Re-slice just in case
+                renderList = animals; 
+            }
         }
 
         // Calculate scaling factor based on zoom.
@@ -218,8 +249,7 @@ export class AnimalManager {
         const shadowShiftY = (config.shadowY || 0) * scaleFactor;
 
         // Apply Distribution Spread
-        // If Ranch is present, force tighter spread (1.0x) to look like a pen/pasture
-        const spreadMult = hasRanch ? 1.0 : (config.clumpSpread || 1.0);
+        const spreadMult = config.clumpSpread || 1.0;
 
         renderList.forEach(animal => {
             let row = 0; // Idle
@@ -233,7 +263,7 @@ export class AnimalManager {
             const offsetX = (animal.x * spreadMult) * scaleFactor + globalShiftX;
             const offsetY = (animal.y * spreadMult) * scaleFactor + globalShiftY;
 
-            if ((config.drawShadow ?? true) && config.shadowScale > 0) {
+            if (quality.shadowsEnabled && (config.drawShadow ?? true) && config.shadowScale > 0) {
                 // Draw shadow (Scaled)
                 ctx.beginPath();
                 const sx = screenX + offsetX + shadowShiftX;
